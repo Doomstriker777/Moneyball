@@ -26,3 +26,4 @@ The mutation check script (`scripts/mutation-check.sh`) will systematically disa
 | Remove `PESSIMISTIC_WRITE` lock | Race condition occurs under 20 concurrent withdrawals | Concurrency race fails | Scheduled Day 2 AM |
 | Remove `UNIQUE(user_id, key)` on idempotency | Duplicate payments created | Replay test fails | Scheduled Day 2 AM |
 | Remove append-only trigger | Updates to entries succeed silently | Immutability test fails | Scheduled Day 2 AM |
+

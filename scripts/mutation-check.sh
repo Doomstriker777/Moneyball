@@ -9,3 +9,4 @@ echo "Testing invariant 3: Removing idempotency UNIQUE constraint must cause dup
 echo "Testing invariant 4: Removing append-only trigger must allow illegal mutations..."
 
 # Detailed automated mutation tests are executed against the test suite in Day 2 AM.
+

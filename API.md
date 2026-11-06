@@ -40,3 +40,4 @@ This document details every endpoint in the LedgerLine core banking engine, the 
 | `/api/audit/verify` | `GET` | `ADMIN`, `AUDITOR` | `Authorization: Bearer <token>` | None | Traverses per-account SHA-256 hash chains from genesis to tip. Reports broken links or confirms cryptographic integrity. |
 | `/api/audit/flags` | `GET` | `ADMIN`, `AUDITOR` | `Authorization: Bearer <token>` | None | Lists compliance flags (large transfers, velocity, structuring, repeated refusals). |
 | `/api/audit/flags/{id}/review` | `POST` | `ADMIN` only | `Authorization: Bearer <token>` | None | Records human compliance review note and transitions flag to `REVIEWED`. |
+

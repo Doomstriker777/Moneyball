@@ -17,7 +17,25 @@ Most fintech backends store balances as simple mutable columns with implicit tru
 
 ---
 
-## 2. Technology Stack
+## 2. Double-Entry Model & Mathematical Invariant (Plain English)
+
+In LedgerLine, money is never created or destroyed out of thin air. Instead, the universe of money is closed by a single system account named `EXTERNAL` (Account ID 1, `EXT-000000`).
+
+### The Double-Entry Rules:
+1. **Customer Deposit (+₹100)**: Customer account is CREDITED 10,000 paise (+10,000). The `EXTERNAL` account is DEBITED 10,000 paise (-10,000).
+   $$\text{Sum} = (+10,000) + (-10,000) = 0$$
+2. **Customer Withdrawal (-₹50)**: Customer account is DEBITED 5,000 paise (-5,000). The `EXTERNAL` account is CREDITED 5,000 paise (+5,000).
+   $$\text{Sum} = (-5,000) + (+5,000) = 0$$
+3. **Internal Transfer (A → B, ₹30)**: Source Customer A is DEBITED 3,000 paise (-3,000). Destination Customer B is CREDITED 3,000 paise (+3,000).
+   $$\text{Sum} = (-3,000) + (+3,000) = 0$$
+
+### The Conservation Invariant:
+$$\sum_{\text{all accounts}} \text{balance} \equiv 0$$
+At any second, the sum of all customer account balances is exactly offset by the negative balance of the `EXTERNAL` account. Even if the application crashes halfway through an operation, PostgreSQL's deferred constraint trigger (`trg_journal_balanced`) validates that `SUM(credits) == SUM(debits)` before transaction commit, guaranteeing zero drift.
+
+---
+
+## 3. Technology Stack
 
 | Layer | Technology | Details |
 |---|---|---|
@@ -30,72 +48,50 @@ Most fintech backends store balances as simple mutable columns with implicit tru
 
 ---
 
-## 3. Monorepo Layout
+## 4. API Endpoints (Built So Far)
 
-```
-ledgerline/
-├── backend/                       # Spring Boot 3 & Java 21 Application
-│   ├── src/main/java/com/ledgerline/
-│   │   ├── config/                # Security, CORS, OpenAPI Configuration
-│   │   ├── controller/            # REST Endpoints
-│   │   ├── domain/                # JPA Entities & Enums
-│   │   ├── dto/                   # Request/Response DTOs
-│   │   ├── exception/             # RFC 7807 Global ProblemDetail Handler
-│   │   ├── repository/            # Spring Data Repositories & Locking Queries
-│   │   ├── security/              # JWT Filters & UserDetailsService
-│   │   └── service/               # Posting Service & Business Logic
-│   └── src/main/resources/
-│       ├── application.yml        # Production & Dev Configuration (ddl-auto: validate)
-│       └── db/migration/          # Flyway SQL Migrations (V1 Schema, V2 Seed)
-├── frontend/                      # React 18 + Vite + TypeScript Application
-│   ├── src/                       # Living Ledger components & design system
-│   ├── package.json
-│   └── vite.config.ts
-├── docs/                          # Architecture diagrams & walkthroughs
-├── scripts/                       # Mutation check and verification scripts
-├── docker-compose.yml             # Local PostgreSQL service
-├── API.md                         # Detailed API contract & money effects
-├── THREATS.md                     # Threat model, race conditions, and mitigations
-├── PROMPTS.md                     # Audit log of prompts, mistakes caught, and self-checks
-└── README.md                      # Project documentation (updated each commit)
-```
+### Authentication
+- `POST /api/auth/login` — Authenticate and receive JWT token.
+- `GET /api/auth/me` — Inspect current user context.
 
----
+### Accounts & Statements
+- `GET /api/accounts` — List accessible accounts for the authenticated user.
+- `GET /api/accounts/{id}` — Get single account details (returns 404 for unentitled users).
+- `GET /api/accounts/{id}/statement` — Ruled-ledger statement merging posted entries with refused attempts in chronological order.
 
-## 4. Local Setup & Running
+### Money Operations
+- `POST /api/deposits` — Ingest external funds (Debits EXTERNAL, Credits Customer).
+- `POST /api/withdrawals` — Outgoing cash settlement (Debits Customer, Credits EXTERNAL).
+- `POST /api/transfers` — Internal transfer between accounts with deadlock-free ordered locking.
 
-### Prerequisites
-- Java 21 JDK (Temurin 21 recommended)
-- Maven 3.9+
-- PostgreSQL 16+ or Docker
-- Node.js 18+ and npm
+### Example `curl` Calls:
 
-### 1. Database Setup
-Start PostgreSQL via Docker Compose:
+**1. Login as Holder 1**:
 ```bash
-docker compose up -d
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"holder1@ledgerline.internal","password":"Holder123!"}'
 ```
-*Alternatively, connect to a local PostgreSQL instance on port `5432` with username `postgres`, password `postgres`, and database `ledgerline`.*
 
-### 2. Run Backend
+**2. Transfer ₹150.00 from Holder 1 to Holder 2**:
 ```bash
-cd backend
-mvn clean test
-mvn spring-boot:run
+curl -X POST http://localhost:8080/api/transfers \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: c9b22e1b-7a3b-4c5c-9c60-e8f0a1234567" \
+  -d '{
+    "sourceAccountId": 2,
+    "destinationAccountId": 3,
+    "amount": 15000,
+    "reason": "Payment for books"
+  }'
 ```
-Flyway automatically applies all migrations on startup. Verify the health check:
-```bash
-curl http://localhost:8080/actuator/health
-```
-Swagger UI documentation is available at: `http://localhost:8080/swagger-ui.html`.
 
-### 3. Run Frontend
+**3. Inspect Ruled-Ledger Statement**:
 ```bash
-cd frontend
-npm install
-npm run dev
+curl -X GET http://localhost:8080/api/accounts/2/statement \
+  -H "Authorization: Bearer <TOKEN>"
 ```
-Open `http://localhost:5173` in your browser.
 
 ---
 
@@ -111,9 +107,6 @@ All passwords are encrypted with BCrypt (cost factor 10).
 | **HOLDER** | `holder2@ledgerline.internal` | `Holder222!` | `ACC-100002` | Balance: ₹500.00 (50,000 paise) |
 | **SYSTEM** | `system@ledgerline.internal` | *N/A* | `EXT-000000` | Balance: -₹1,500.00 (-150,000 paise) |
 
-**Initial Conservation Equation**:
-$$\Sigma \text{ Customer Balances (₹1,500.00)} + \text{System External Balance (-₹1,500.00)} = 0$$
-
 ---
 
 ## 6. Implementation Progress Checklist
@@ -127,13 +120,14 @@ $$\Sigma \text{ Customer Balances (₹1,500.00)} + \text{System External Balance
   - [x] Baseline test suite and invariant verification
   - [x] React + Vite + TypeScript frontend with Living Ledger tokens
   - [x] `PROMPTS.md` self-audit log and `THREATS.md` threat model
-- [ ] **Day 1 PM: `feat: ledger core`**
-  - [ ] Account and statement endpoints
-  - [ ] Double-entry posting service (deposit, withdrawal, transfer)
-  - [ ] Ordered pessimistic locking (`SELECT ... FOR UPDATE` in ascending ID order)
-  - [ ] Refused-attempt audit logging via `REQUIRES_NEW`
-  - [ ] Per-account SHA-256 hash chaining
-  - [ ] Service-layer entitlement checks (404 on unentitled accounts)
+- [x] **Day 1 PM: `feat: ledger core`**
+  - [x] Account and statement endpoints (`GET /api/accounts`, `/api/accounts/{id}/statement`)
+  - [x] Double-entry posting service (deposit, withdrawal, transfer)
+  - [x] Ordered pessimistic locking (`SELECT ... FOR UPDATE` in ascending ID order)
+  - [x] Refused-attempt audit logging via `REQUIRES_NEW`
+  - [x] Per-account SHA-256 hash chaining
+  - [x] Service-layer entitlement checks (404 on unentitled accounts to prevent enumeration)
+  - [x] Integration test suite for money movements and statement generation
 - [ ] **Day 2 AM: `feat: idempotency, tests, reconciliation`**
   - [ ] In-transaction `Idempotency-Key` tracking and replay handling
   - [ ] Immutable reversal journals (`UNIQUE(reversal_of)`)

@@ -58,7 +58,7 @@
   6. **Automated Testing**:
      - Wrote `AuthControllerTest` covering 7 test scenarios (conservation invariant on seed, login per role, 401 unauthenticated, bad password handling). All 7 passed.
   7. **Milestone Commit**:
-     - Committed and pushed commit `e5a5669` (`feat: scaffold, schema, auth`) to GitHub.
+     - Committed and pushed commit `2c3f357` (`feat: scaffold, schema, auth`) to GitHub.
 
 ### [INTEGRITY] Self-Review & Flaws Caught in Output
 1. **[INTEGRITY] System Account Overdraft Constraint**:
@@ -71,7 +71,7 @@
    - *Floating point check*: Confirmed zero use of `double` or `float`; all amounts are `BIGINT` paise (`Long`).
    - *ddl-auto check*: Set strictly to `validate`; Flyway manages all DDL.
    - *App role check*: `V1__init_schema.sql` grants only `SELECT, INSERT` on ledger tables to `ledger_app`.
-- **Commit Hash**: `e5a5669` (`feat: scaffold, schema, auth`)
+- **Commit Hash**: `2c3f357` (`feat: scaffold, schema, auth`)
 
 ---
 
@@ -84,7 +84,7 @@
 - **What Was Produced**:
   - Restructured `PROMPTS.md` into distinct entries for Prompts 1, 2, and 3.
   - Added timestamped quotes of user prompts alongside layman-friendly explanations of what was asked, why it was asked, what technical artifacts were produced, and what integrity flaws were caught and mitigated.
-- **Commit Hash**: Included in `e5a5669` / Commit 1.
+- **Commit Hash**: Included in `2c3f357`.
 
 ---
 
@@ -95,5 +95,53 @@
 - **Context for a Stranger**:
   The user reviewed the revamped `PROMPTS.md` audit log and explicitly instructed the assistant to commit and push this update to the remote GitHub repository immediately.
 - **What Was Produced**:
-  - Updated `PROMPTS.md` with Prompt 4 and amended the Milestone 1 commit on GitHub to keep the exact six-milestone commit history clean and current.
-- **Commit Hash**: `37b3f4d` (`feat: scaffold, schema, auth`)
+  - Committed and pushed the enhanced audit journal to GitHub remote (`main`).
+- **Commit Hash**: `2c3f357` (`feat: scaffold, schema, auth`)
+
+---
+
+## Prompt 5: Milestone 2 — Ledger Core Implementation (Day 1 PM)
+- **Timestamp**: `2026-11-06 13:17:00 IST`
+- **User Prompt**:
+  > "Continue" (Proceeding with Milestone 2: `feat: ledger core`).
+- **Context for a Stranger**:
+  Having completed the scaffolding and authentication, the assistant was instructed to build the heart of the double-entry accounting engine:
+  - Endpoints to inspect accounts and fetch ruled-ledger statements.
+  - The posting service implementing internal transfers, external deposits, and cash withdrawals.
+  - Ordered row-level pessimistic locking (`SELECT ... FOR UPDATE` in ascending account ID order) to mathematically guarantee deadlock freedom under concurrent opposing transfers.
+  - Surviving audit trail: recording refused requests (insufficient funds, frozen accounts) in a dedicated transaction (`REQUIRES_NEW`) so they persist even when the money operation rolls back.
+  - Per-account cryptographic SHA-256 hash chaining.
+  - Strict service-level entitlement checks that return `404 Not Found` (rather than `403 Forbidden`) when users probe accounts they do not own, eliminating enumeration attacks.
+- **What Was Produced**:
+  1. **Core Domain Services**:
+     - `PostingService`: Implemented `transfer`, `deposit`, and `withdraw` with ordered pessimistic locking.
+     - `AccountService`: Lookups and entitlement enforcement returning 404 for unentitled users.
+     - `AttemptLoggingService`: Split into `logRefusal` (runs in `REQUIRES_NEW` with `journalId = null` to survive rollbacks) and `logPosted` (runs in `REQUIRED` inside the same transaction as the journal).
+     - `HashService`: SHA-256 hash chain generation per account linking `prev_hash` to the new balance state.
+  2. **REST Endpoints & DTOs**:
+     - `AccountController`: `GET /api/accounts`, `GET /api/accounts/{id}`, `GET /api/accounts/{id}/statement`.
+     - `PostingController`: `POST /api/transfers`, `POST /api/deposits`, `POST /api/withdrawals`.
+     - DTOs: `TransferRequest`, `DepositRequest`, `WithdrawalRequest`, `PostingResponse`, `StatementResponse`, `StatementItemResponse`.
+  3. **Integration Test Suite (`PostingIntegrationTest`)**:
+     - Deposit test verifying double-entry debit against `EXTERNAL` and conservation sum = 0.
+     - Withdrawal test verifying credit to `EXTERNAL` and conservation sum = 0.
+     - Transfer test verifying ordered locking and balance preservation.
+     - Refusal persistence test: attempted withdrawal exceeding balance rolls back the posting transaction, leaves no journal, but commits a `REFUSED` row in `ledger_attempts` table.
+     - Anti-enumeration test: unentitled debit attempt returns `404 Not Found`.
+     - Auditor write protection test: write attempt by auditor returns `403 Forbidden`.
+     - Statement test: confirms chronological merge of entries and running balances.
+  4. **Documentation**:
+     - Updated `README.md` (v2) with plain-English double-entry rules, conservation formula, curl examples, and Day 1 PM checklist completion.
+
+### [INTEGRITY] Self-Review & Flaws Caught in Output
+1. **[INTEGRITY] Foreign Key Failure on Uncommitted Journal with `REQUIRES_NEW`**:
+   - *Risk/Flaw*: In the initial implementation of `AttemptLoggingService`, a single method `logAttempt` was marked `@Transactional(propagation = Propagation.REQUIRES_NEW)`. On successful transfers, `PostingService` called `logAttempt(..., journal.getId(), outcome = POSTED)`. Because `REQUIRES_NEW` suspends the outer posting transaction and executes in a separate database transaction, the uncommitted `journal` row was not visible to the attempt logger. PostgreSQL rejected the insert with: `ERROR: insert or update on table "ledger_attempts" violates foreign key constraint "ledger_attempts_journal_id_fkey" (Key journal_id=3 is not present in table journals)`.
+   - *Correction*: Separated transaction boundaries:
+     - `logRefusal(...)` runs in `@Transactional(propagation = Propagation.REQUIRES_NEW)` with `journalId = null`. Refusals are independent and survive the rollback of the outer transaction.
+     - `logPosted(...)` runs in `@Transactional(propagation = Propagation.REQUIRED)`. It executes in the *same* transaction as the journal and ledger entries, satisfying the foreign key constraint and guaranteeing atomic all-or-nothing ledger consistency.
+2. **Standing Rules Checklist (Section 0.2)**:
+   - *Check-then-act without lock*: `PostingService` acquires pessimistic write lock (`findByIdForUpdate`) in strictly ascending order *before* inspecting balances.
+   - *Deadlock prevention*: Lock acquisition order is always `min(sourceId, destId)` followed by `max(sourceId, destId)`.
+   - *Self-invocation proxy bypass*: `AttemptLoggingService` is a dedicated, separately injected Spring bean, ensuring `@Transactional(propagation = Propagation.REQUIRES_NEW)` is never bypassed.
+   - *Anti-enumeration*: Entitlement failures in `AccountService` and `PostingService` throw `ResourceNotFoundException` (404), preventing attackers from enumerating valid account IDs.
+- **Commit Hash**: `f3d8947` (`feat: ledger core`)
