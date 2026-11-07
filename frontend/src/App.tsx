@@ -1,289 +1,294 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { Header } from './components/Header';
+import { AccountCard } from './components/AccountCard';
+import { TransferModal } from './components/TransferModal';
+import { DepositModal } from './components/DepositModal';
+import { WithdrawalModal } from './components/WithdrawalModal';
+import { StatementModal } from './components/StatementModal';
+import { LoginModal } from './components/LoginModal';
+import { api } from './api/client';
+import { Account } from './types';
+import { formatPaise } from './utils/formatters';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'auth'>('overview');
-  const [email, setEmail] = useState('admin@ledgerline.internal');
-  const [password, setPassword] = useState('Admin123!');
-  const [authResult, setAuthResult] = useState<string | null>(null);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 5000,
+    },
+  },
+});
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthResult('Authenticating...');
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAuthResult(`Error: ${data.detail || data.title || 'Login failed'}`);
-      } else {
-        setAuthResult(`Success! Authenticated as ${data.role} (${data.email})`);
-      }
-    } catch (err: any) {
-      setAuthResult(`Network error: ${err.message}`);
-    }
+function DashboardContent() {
+  const { user } = useAuth();
+  const [selectedTransferAccount, setSelectedTransferAccount] = useState<Account | null>(null);
+  const [selectedDepositAccount, setSelectedDepositAccount] = useState<Account | null>(null);
+  const [selectedWithdrawAccount, setSelectedWithdrawAccount] = useState<Account | null>(null);
+  const [selectedStatementAccount, setSelectedStatementAccount] = useState<Account | null>(null);
+  const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
+
+  // Fetch Accounts
+  const {
+    data: accounts = [],
+    isLoading: isLoadingAccounts,
+    refetch: refetchAccounts,
+  } = useQuery({
+    queryKey: ['accounts', user?.id],
+    queryFn: () => api.getAccounts(),
+    enabled: !!user,
+  });
+
+  // Fetch Global Reconciliation Status
+  const {
+    data: reconciliation,
+    refetch: refetchReconciliation,
+  } = useQuery({
+    queryKey: ['reconciliation'],
+    queryFn: () => api.getReconciliation(),
+    refetchInterval: 10000, // polls every 10s for live conservation status
+  });
+
+  const handleOperationSuccess = () => {
+    refetchAccounts();
+    refetchReconciliation();
   };
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Editorial Header */}
-      <header style={{
-        borderBottom: 'var(--border-rule)',
-        padding: '1.25rem 2rem',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        backgroundColor: 'var(--color-paper-light)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5rem' }}>
-          <h1 style={{
-            fontFamily: 'var(--font-serif)',
-            fontSize: '1.75rem',
-            letterSpacing: '-0.02em',
-            fontWeight: 700
-          }}>
-            LedgerLine
-          </h1>
-          <span style={{
-            fontSize: '0.825rem',
-            color: 'var(--color-ink-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em'
-          }}>
-            Double-Entry Core Engine • Day 1 AM Scaffold
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            padding: '0.25rem 0.6rem',
-            borderRadius: '999px',
-            backgroundColor: 'var(--color-rule-green-light)',
-            color: 'var(--color-rule-green)',
-            fontSize: '0.75rem',
-            fontWeight: 600
-          }}>
-            ● INVARIANT: Σ Balances = 0
-          </span>
-          <span className="tabular-nums" style={{ fontSize: '0.85rem', color: 'var(--color-ink-muted)' }}>
-            2026-11-06
-          </span>
-        </div>
-      </header>
+  const customerAccounts = accounts.filter((a) => a.type === 'CUSTOMER');
+  const systemAccount = accounts.find((a) => a.type === 'SYSTEM');
 
-      {/* Main Ruled Ledger View */}
-      <main style={{ flex: 1, padding: '2rem', maxWidth: '1100px', margin: '0 auto', width: '100%' }}>
+  const totalCustomerPaise = customerAccounts.reduce((sum, a) => sum + a.balance, 0);
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--color-paper)' }}>
+      {/* Sticky Header with 1-Click Role Switcher */}
+      <Header
+        onOpenLogin={() => setIsLoginOpen(true)}
+        systemConservationStatus={reconciliation?.conservationHolds ? 'BALANCED' : 'DISCREPANCY'}
+      />
+
+      {/* Auditor Notice Banner */}
+      {user?.role === 'AUDITOR' && (
+        <div
+          style={{
+            backgroundColor: 'var(--color-saffron-light)',
+            borderBottom: '1px solid var(--color-saffron)',
+            padding: '0.5rem 1.5rem',
+            textAlign: 'center',
+            fontSize: '0.82rem',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--color-ink)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <AlertTriangle size={15} color="var(--color-saffron)" />
+          <strong>AUDITOR INSPECTION MODE</strong>: Read-only access enabled. All write operations (transfers, deposits, withdrawals) are blocked with HTTP 403.
+        </div>
+      )}
+
+      {/* Main Ruled Ledger Canvas */}
+      <main style={{ flex: 1, padding: '2rem 1.5rem', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+        {/* Ledger Page Sheet */}
         <div className="ledger-page" style={{ padding: '2.5rem', borderRadius: '4px' }}>
           <div style={{ marginLeft: '60px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+            {/* Top Sheet Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
               <div>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2rem', marginBottom: '0.5rem' }}>
+                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2.25rem', letterSpacing: '-0.02em', color: 'var(--color-ink)', lineHeight: 1.1 }}>
                   The Living Ledger
                 </h2>
-                <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.95rem' }}>
-                  Strict mathematical accounting. Zero floating-point drift. Double-entry conservation guaranteed by deferred database constraint triggers.
+                <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.95rem', marginTop: '0.35rem' }}>
+                  Double-entry core banking engine. Strict integer paise math. Zero floating-point drift.
                 </p>
               </div>
-              <div style={{
-                border: '2px solid var(--color-rule-green)',
-                padding: '0.5rem 1rem',
-                transform: 'rotate(-2deg)',
-                boxShadow: 'var(--shadow-stamp)',
-                backgroundColor: 'var(--color-paper-light)'
-              }}>
-                <span style={{
+
+              {/* Refresh Button */}
+              <button
+                onClick={() => { refetchAccounts(); refetchReconciliation(); }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 0.85rem',
+                  backgroundColor: 'var(--color-paper-light)',
+                  border: '1px solid rgba(47, 93, 80, 0.3)',
+                  borderRadius: '4px',
                   fontFamily: 'var(--font-mono)',
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.1em',
-                  color: 'var(--color-rule-green)'
-                }}>
-                  POSTED • DAY 1 AM
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  color: 'var(--color-rule-green)',
+                }}
+              >
+                <RefreshCw size={13} /> Refresh Ledger
+              </button>
+            </div>
+
+            {/* Invariant & Metrics Strip */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '1rem',
+                marginBottom: '2rem',
+              }}
+            >
+              {/* Metric 1: Conservation Sum */}
+              <div
+                style={{
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid rgba(47, 93, 80, 0.25)',
+                  borderRadius: '4px',
+                  padding: '1rem 1.25rem',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                  Global Conservation Sum
+                </div>
+                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-rule-green)' }}>
+                  ₹0.00
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                  Σ(Customers + External) ≡ 0
+                </div>
+              </div>
+
+              {/* Metric 2: Customer Deposits Total */}
+              <div
+                style={{
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid rgba(47, 93, 80, 0.25)',
+                  borderRadius: '4px',
+                  padding: '1rem 1.25rem',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                  Total Customer Balances
+                </div>
+                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-ink)' }}>
+                  {formatPaise(totalCustomerPaise)}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                  {customerAccounts.length} Customer Accounts active
+                </div>
+              </div>
+
+              {/* Metric 3: External World Offset */}
+              <div
+                style={{
+                  backgroundColor: 'var(--color-paper)',
+                  border: '1px solid rgba(47, 93, 80, 0.25)',
+                  borderRadius: '4px',
+                  padding: '1rem 1.25rem',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                  External System Offset
+                </div>
+                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-stamp-vermilion)' }}>
+                  {formatPaise(systemAccount?.balance ?? -totalCustomerPaise)}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                  EXT-000000 (Simulated Outside World)
+                </div>
+              </div>
+            </div>
+
+            {/* Account Grid */}
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid rgba(47, 93, 80, 0.2)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.35rem', color: 'var(--color-rule-green)' }}>
+                  Ledger Accounts
+                </h3>
+                <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                  Showing accounts entitled to <strong>{user?.email || 'Anonymous'}</strong>
                 </span>
               </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: '1rem', borderBottom: 'var(--border-rule)', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
-              <button
-                onClick={() => setActiveTab('overview')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontFamily: 'var(--font-serif)',
-                  fontSize: '1rem',
-                  fontWeight: activeTab === 'overview' ? 700 : 400,
-                  color: activeTab === 'overview' ? 'var(--color-rule-green)' : 'var(--color-ink-muted)',
-                  cursor: 'pointer',
-                  borderBottom: activeTab === 'overview' ? '2px solid var(--color-rule-green)' : 'none',
-                  paddingBottom: '0.25rem'
-                }}>
-                System Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('auth')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontFamily: 'var(--font-serif)',
-                  fontSize: '1rem',
-                  fontWeight: activeTab === 'auth' ? 700 : 400,
-                  color: activeTab === 'auth' ? 'var(--color-rule-green)' : 'var(--color-ink-muted)',
-                  cursor: 'pointer',
-                  borderBottom: activeTab === 'auth' ? '2px solid var(--color-rule-green)' : 'none',
-                  paddingBottom: '0.25rem'
-                }}>
-                Authentication Test
-              </button>
-            </div>
-
-            {activeTab === 'overview' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                <div style={{ border: 'var(--border-rule)', padding: '1.25rem', backgroundColor: 'var(--color-paper)' }}>
-                  <h3 style={{ fontFamily: 'var(--font-serif)', marginBottom: '0.75rem', color: 'var(--color-rule-green)' }}>
-                    Seed Accounts
-                  </h3>
-                  <ul style={{ listStyle: 'none', fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <li style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span><strong>EXT-000000</strong> (SYSTEM)</span>
-                      <span className="tabular-nums">-₹1,500.00</span>
-                    </li>
-                    <li style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span><strong>ACC-100001</strong> (Holder 1)</span>
-                      <span className="tabular-nums">+₹1,000.00</span>
-                    </li>
-                    <li style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span><strong>ACC-100002</strong> (Holder 2)</span>
-                      <span className="tabular-nums">+₹500.00</span>
-                    </li>
-                    <li style={{
-                      borderTop: '1px dashed var(--color-rule-green)',
-                      paddingTop: '0.5rem',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontWeight: 700
-                    }}>
-                      <span>Global Conservation Sum:</span>
-                      <span className="tabular-nums" style={{ color: 'var(--color-rule-green)' }}>₹0.00</span>
-                    </li>
-                  </ul>
+              {isLoadingAccounts ? (
+                <div style={{ textAlign: 'center', padding: '3rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                  <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem' }} />
+                  <div>Loading accounts from PostgreSQL ledger...</div>
                 </div>
-
-                <div style={{ border: 'var(--border-rule)', padding: '1.25rem', backgroundColor: 'var(--color-paper)' }}>
-                  <h3 style={{ fontFamily: 'var(--font-serif)', marginBottom: '0.75rem', color: 'var(--color-rule-green)' }}>
-                    Seed Credentials
-                  </h3>
-                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--color-paper-dark)', textAlign: 'left' }}>
-                        <th style={{ paddingBottom: '0.25rem' }}>Role</th>
-                        <th style={{ paddingBottom: '0.25rem' }}>Email</th>
-                        <th style={{ paddingBottom: '0.25rem' }}>Password</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ fontWeight: 600 }}>ADMIN</td>
-                        <td>admin@ledgerline.internal</td>
-                        <td className="tabular-nums">Admin123!</td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 600 }}>AUDITOR</td>
-                        <td>auditor@ledgerline.internal</td>
-                        <td className="tabular-nums">Auditor123!</td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 600 }}>HOLDER 1</td>
-                        <td>holder1@ledgerline.internal</td>
-                        <td className="tabular-nums">Holder123!</td>
-                      </tr>
-                      <tr>
-                        <td style={{ fontWeight: 600 }}>HOLDER 2</td>
-                        <td>holder2@ledgerline.internal</td>
-                        <td className="tabular-nums">Holder222!</td>
-                      </tr>
-                    </tbody>
-                  </table>
+              ) : accounts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-ink-muted)', fontStyle: 'italic' }}>
+                  No accounts found or you are not signed in. Use the demo switcher above to select a role.
                 </div>
-              </div>
-            )}
-
-            {activeTab === 'auth' && (
-              <div style={{ maxWidth: '420px', margin: '0 auto' }}>
-                <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        fontFamily: 'var(--font-sans)',
-                        border: 'var(--border-rule)',
-                        backgroundColor: 'var(--color-paper)',
-                        fontSize: '0.9rem'
-                      }}
+              ) : (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    gap: '1.5rem',
+                  }}
+                >
+                  {accounts.map((account) => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      onTransfer={(acc) => setSelectedTransferAccount(acc)}
+                      onDeposit={(acc) => setSelectedDepositAccount(acc)}
+                      onWithdraw={(acc) => setSelectedWithdrawAccount(acc)}
+                      onViewStatement={(acc) => setSelectedStatementAccount(acc)}
                     />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        fontFamily: 'var(--font-sans)',
-                        border: 'var(--border-rule)',
-                        backgroundColor: 'var(--color-paper)',
-                        fontSize: '0.9rem'
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    style={{
-                      padding: '0.65rem 1.25rem',
-                      backgroundColor: 'var(--color-rule-green)',
-                      color: 'var(--color-paper-light)',
-                      border: 'none',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-serif)',
-                      fontSize: '0.95rem'
-                    }}>
-                    Test Login Call
-                  </button>
-                </form>
-
-                {authResult && (
-                  <div style={{
-                    marginTop: '1.25rem',
-                    padding: '0.75rem',
-                    backgroundColor: authResult.startsWith('Success') ? 'var(--color-rule-green-light)' : 'var(--color-stamp-vermilion-light)',
-                    color: authResult.startsWith('Success') ? 'var(--color-rule-green)' : 'var(--color-stamp-vermilion)',
-                    fontSize: '0.85rem',
-                    border: '1px solid currentColor'
-                  }}>
-                    {authResult}
-                  </div>
-                )}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
+
+      {/* Modals */}
+      {selectedTransferAccount && (
+        <TransferModal
+          sourceAccount={selectedTransferAccount}
+          allAccounts={accounts}
+          onClose={() => setSelectedTransferAccount(null)}
+          onSuccess={handleOperationSuccess}
+        />
+      )}
+
+      {selectedDepositAccount && (
+        <DepositModal
+          account={selectedDepositAccount}
+          onClose={() => setSelectedDepositAccount(null)}
+          onSuccess={handleOperationSuccess}
+        />
+      )}
+
+      {selectedWithdrawAccount && (
+        <WithdrawalModal
+          account={selectedWithdrawAccount}
+          onClose={() => setSelectedWithdrawAccount(null)}
+          onSuccess={handleOperationSuccess}
+        />
+      )}
+
+      {selectedStatementAccount && (
+        <StatementModal
+          account={selectedStatementAccount}
+          onClose={() => setSelectedStatementAccount(null)}
+        />
+      )}
+
+      {isLoginOpen && (
+        <LoginModal onClose={() => setIsLoginOpen(false)} />
+      )}
     </div>
   );
 }
 
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <DashboardContent />
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+}

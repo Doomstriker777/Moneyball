@@ -177,11 +177,15 @@ All passwords are encrypted with BCrypt (cost factor 10).
   - [x] Multi-threaded concurrency race tests (Conservation, No-overdraw, Opposing transfers, Concurrent replays)
   - [x] Concurrency retry wrapper outside transaction with exponential backoff & random jitter
   - [x] Automated mutation check script (`scripts/mutation-check.sh`) and threat matrix in `THREATS.md`
-- [ ] **Day 2 PM: `feat(ui): design system, auth, dashboard, transfer`**
-  - [ ] Living Ledger design system & typography (Fraunces, IBM Plex Mono)
-  - [ ] Authentication screens and session management
-  - [ ] Account dashboard with odometer number animations
-  - [ ] Transfer and deposit forms with automatic idempotency keys
+- [x] **Day 2 PM: `feat(ui): design system, auth, dashboard, transfer`**
+  - [x] Living Ledger design system & tactile tokens (Fraunces serif, IBM Plex Mono, warm paper `#F4EFE6`, ruled lines)
+  - [x] 1-Click Role Switcher bar (`ADMIN`, `HOLDER 1`, `HOLDER 2`, `AUDITOR`) with automatic JWT authentication
+  - [x] Interactive Login modal with 5-attempt brute-force lockout warnings
+  - [x] Account dashboard cards with live Framer Motion balance odometer flip-digit animations
+  - [x] Atomic Transfer modal with live Rupee-to-paise conversion, pre-generated `Idempotency-Key`, and animated rubber stamp results (`POSTED` in green, `REFUSED` in red with survival guarantee)
+  - [x] Simulated External Deposit & Cash Withdrawal modals tested against double-entry offset and overdraft limits
+  - [x] Chronological Ruled-Ledger Statement viewer with running balances and stamp outcomes
+  - [x] Real-time invariant header indicator (`● Σ ALL BALANCES = 0`) polling reconciliation status
 - [ ] **Day 3 AM: `feat(ui): statement, proof, admin, attack lab`**
   - [ ] Ruled-ledger statement view with animated outcome stamps
   - [ ] Live Proof Panel (`Σ balances = 0`, cryptographic seal status)

@@ -217,4 +217,62 @@
    - *Correction*: Updated `V2__seed_data.sql` to explicitly format in UTC via `to_char(t1 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`, guaranteeing identical hashes across Java and PostgreSQL. Furthermore, all runtime timestamps in `PostingService` and `ReversalService` are now truncated to microseconds (`truncatedTo(ChronoUnit.MICROS)`) to maintain hash chain stability across database serialization round-trips.
 3. **[INTEGRITY] Concurrency Retry Wrapper Outside Transactions**:
    - *Check*: Section 2 specifies: "Retry on serialization or deadlock errors (max 3, with jitter) at a wrapper outside the transaction." Added `executeWithRetry` in `PostingController` wrapping money operations with exponential backoff (10ms, 20ms, 40ms) and random jitter (0..25ms) catching transient `ConcurrencyFailureException`.
-- **Commit Hash**: `45258c8` (`feat: idempotency, tests, reconciliation`)
+- **Commit Hash**: `3887f67` (`feat: idempotency, tests, reconciliation`)
+
+---
+
+## Prompt 8: Repository Renaming on GitHub
+- **Timestamp**: `2026-11-07 11:11:53 IST`
+- **User Prompt**:
+  > "change the project name to Moneyball in github"
+- **Context for a Stranger**:
+  The user requested renaming the GitHub repository from `ledgerline` to `Moneyball`. The assistant accessed the GitHub REST API using the stored credentials for user `Doomstriker777`, executed a PATCH request to rename the remote repository to `Moneyball`, updated the local Git remote origin to `https://github.com/Doomstriker777/Moneyball.git`, and verified remote connectivity.
+- **What Was Produced**:
+  - GitHub repository renamed: [`https://github.com/Doomstriker777/Moneyball`](https://github.com/Doomstriker777/Moneyball)
+  - Local git remote updated to point to `https://github.com/Doomstriker777/Moneyball.git`
+- **Self-Review Checklist Verification**:
+  - Verified no application code or money logic was modified.
+  - Changes will be tracked and committed in Milestone 4 (`feat(ui): design system, auth, dashboard, transfer`) to adhere to the strict 6-milestone Conventional Commit mandate.
+- **Commit Status**: Included in Commit 4 (`feat(ui): design system, auth, dashboard, transfer`)
+
+---
+
+## Prompt 9: Milestone 4 — Design System, Auth, Dashboard & Transfer UI (Day 2 PM)
+- **Timestamp**: `2026-11-07 16:37:27 IST`
+- **User Prompt**:
+  > "lets cook the next part"
+- **Context for a Stranger**:
+  The user gave the authorization to proceed with Milestone 4 (Day 2 PM: `feat(ui): design system, auth, dashboard, transfer`). The objective was to build "The Living Ledger" frontend in React 18, Vite, and TypeScript with tactile physical accounting aesthetics, dynamic balance odometers, animated rubber stamps, a 1-click role switcher, and live double-entry transfer and deposit workflows.
+- **What Was Produced**:
+  1. **Living Ledger Design System & Styling**:
+     - Custom typography using Google Fonts: *Fraunces* (editorial serif for headlines & balances), *IBM Plex Mono* (tabular numbers, account numbers, and timestamps), and *Instrument Sans* (body).
+     - Color tokens: warm paper `#F4EFE6`, paper light `#FAF7F2`, deep rule green `#1E3A2F`, vermilion red `#B33927`, and gold/saffron `#C98A2C`.
+     - Physical ledger ruled layout with faint double-ruled borders and left-margin red rules.
+  2. **1-Click Role Switcher & Authentication**:
+     - Sticky Header with 1-click switcher between `ADMIN`, `HOLDER 1`, `HOLDER 2`, and `AUDITOR` preloaded with demo credentials.
+     - Login modal supporting custom credential testing and displaying 5-attempt brute-force lockout warnings.
+     - Live invariant status pill polling `/api/audit/reconcile` and confirming `● Σ ALL BALANCES = 0`.
+  3. **Account Dashboard & Odometer Balance Display**:
+     - `AccountCard` rendering account numbers, owner status, overdraft limits, and live active badges.
+     - `Odometer` component built with Framer Motion, rolling digits vertically on balance increments and decrements.
+  4. **Transfer, Deposit & Withdrawal Workflows**:
+     - `TransferModal`: Double-entry atomic transfer dialog with Rupee-to-paise conversion, overdraft limit validation, and pre-generated `Idempotency-Key` (with manual regeneration).
+     - `DepositModal`: External funding simulator debiting `EXTERNAL` (Account 1) and crediting customer.
+     - `WithdrawalModal`: External cash out debiting customer and crediting `EXTERNAL`.
+     - `RubberStamp` component providing tactile spring slam feedback: green `POSTED`, red `REFUSED` (with survival guarantee note), and slate `REPLAYED`.
+  5. **Chronological Ruled-Ledger Statement Viewer**:
+     - `StatementModal` rendering physical alternating ruled lines, counterparty account details, debits, credits, running balances, and status stamps.
+  6. **Zero-Error Production Build**:
+     - Verified with `npm --prefix frontend run build` generating production assets in `frontend/dist/`.
+
+### [INTEGRITY] Self-Review & Flaws Caught in Output
+1. **[INTEGRITY] Floating Point Rounding in Currency Inputs**:
+   - *Risk/Flaw*: When users input decimal Rupee amounts like `₹150.50`, naive client-side multiplication (`150.50 * 100`) introduces IEEE 754 precision artifacts (e.g. `150.50 * 100 = 15050.000000000002`).
+   - *Correction*: In `rupeesToPaise()`, wrapped decimal conversion in `Math.round(parseFloat(clean) * 100)`, ensuring strictly clean integer paise (`BIGINT`) are sent over the wire.
+2. **[INTEGRITY] Client-Side Auditor Role Enforcement**:
+   - *Risk/Flaw*: While the backend service layer throws `403 Forbidden` for auditors attempting writes, leaving transfer buttons enabled for auditors would yield confusing error states.
+   - *Correction*: Disabled transfer, deposit, and withdrawal action buttons for users logged in as `AUDITOR`, and surfaced an Auditor Inspection Mode banner.
+3. **TypeScript Build Verification**:
+   - *Issue*: `tsc -b` caught unused imports across components (`React`, `Landmark`, `ShieldCheck`).
+   - *Correction*: Purged unused symbols; verified clean production build (`dist/`) in 6.17s.
+- **Commit Hash**: `494d949` (`feat(ui): design system, auth, dashboard, transfer`)
