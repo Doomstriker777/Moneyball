@@ -23,3 +23,4 @@ public class StatementResponse {
     private AccountStatus status;
     private List<StatementItemResponse> items;
 }
+

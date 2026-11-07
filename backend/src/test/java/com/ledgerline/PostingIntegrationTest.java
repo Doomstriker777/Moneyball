@@ -228,3 +228,4 @@ class PostingIntegrationTest {
                 .andExpect(jsonPath("$.items").isArray());
     }
 }
+

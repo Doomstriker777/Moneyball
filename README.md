@@ -48,7 +48,48 @@ At any second, the sum of all customer account balances is exactly offset by the
 
 ---
 
-## 4. API Endpoints (Built So Far)
+## 4. Local Setup & How to Run
+
+### Prerequisites
+- **Java 21 JDK** (e.g. Eclipse Adoptium Temurin 21)
+- **Maven 3.9+** (installed locally or via wrapper)
+- **PostgreSQL 16/17** (running locally or via Docker)
+- **Node.js 18+** and **npm**
+
+### Step 1: Start PostgreSQL
+If using Docker:
+```bash
+docker compose up -d
+```
+If using a native local PostgreSQL service, ensure it is listening on port `5432` with:
+- **Database**: `ledgerline`
+- **Username**: `postgres`
+- **Password**: `postgres`
+
+### Step 2: Run the Backend
+Open a terminal in the project root:
+```bash
+cd backend
+mvn clean test
+mvn spring-boot:run
+```
+Flyway automatically runs all database migrations on boot.
+- **Health Check**: `curl http://localhost:8080/actuator/health`
+- **Swagger UI**: [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html)
+- **OpenAPI JSON**: `http://localhost:8080/api-docs`
+
+### Step 3: Run the Frontend
+Open a second terminal in the project root:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Open [`http://localhost:5173`](http://localhost:5173) in your browser to view **The Living Ledger**.
+
+---
+
+## 5. API Endpoints (Built So Far)
 
 ### Authentication
 - `POST /api/auth/login` — Authenticate and receive JWT token.
@@ -95,7 +136,7 @@ curl -X GET http://localhost:8080/api/accounts/2/statement \
 
 ---
 
-## 5. Seed Users & Accounts
+## 6. Seed Users & Accounts
 
 All passwords are encrypted with BCrypt (cost factor 10).
 
@@ -109,7 +150,7 @@ All passwords are encrypted with BCrypt (cost factor 10).
 
 ---
 
-## 6. Implementation Progress Checklist
+## 7. Implementation Progress Checklist
 
 - [x] **Day 1 AM: `feat: scaffold, schema, auth`**
   - [x] Monorepo layout (`/backend`, `/frontend`, `/docs`, `/scripts`, config files)
@@ -128,13 +169,14 @@ All passwords are encrypted with BCrypt (cost factor 10).
   - [x] Per-account SHA-256 hash chaining
   - [x] Service-layer entitlement checks (404 on unentitled accounts to prevent enumeration)
   - [x] Integration test suite for money movements and statement generation
-- [ ] **Day 2 AM: `feat: idempotency, tests, reconciliation`**
-  - [ ] In-transaction `Idempotency-Key` tracking and replay handling
-  - [ ] Immutable reversal journals (`UNIQUE(reversal_of)`)
-  - [ ] Rule-based compliance flags
-  - [ ] Reconciliation and hash-chain verification endpoints
-  - [ ] Full concurrent test suite (conservation, overdraw, deadlocks, replays)
-  - [ ] Automated mutation check script (`scripts/mutation-check.sh`)
+- [x] **Day 2 AM: `feat: idempotency, tests, reconciliation`**
+  - [x] In-transaction `Idempotency-Key` tracking and atomic replay handling (`IN_PROGRESS`, `COMPLETED`, `409`, `422`)
+  - [x] Immutable reversal journals with database-enforced single reversal (`UNIQUE(reversal_of)`)
+  - [x] Rule-based anti-fraud flags (`LARGE_AMOUNT`, `ROUND_STRUCTURING`, `VELOCITY_LIMIT`, `REPEATED_REFUSALS`)
+  - [x] Real-time reconciliation (`GET /api/audit/reconcile`) and hash chain audit (`GET /api/audit/verify`)
+  - [x] Multi-threaded concurrency race tests (Conservation, No-overdraw, Opposing transfers, Concurrent replays)
+  - [x] Concurrency retry wrapper outside transaction with exponential backoff & random jitter
+  - [x] Automated mutation check script (`scripts/mutation-check.sh`) and threat matrix in `THREATS.md`
 - [ ] **Day 2 PM: `feat(ui): design system, auth, dashboard, transfer`**
   - [ ] Living Ledger design system & typography (Fraunces, IBM Plex Mono)
   - [ ] Authentication screens and session management

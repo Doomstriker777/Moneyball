@@ -144,4 +144,77 @@
    - *Deadlock prevention*: Lock acquisition order is always `min(sourceId, destId)` followed by `max(sourceId, destId)`.
    - *Self-invocation proxy bypass*: `AttemptLoggingService` is a dedicated, separately injected Spring bean, ensuring `@Transactional(propagation = Propagation.REQUIRES_NEW)` is never bypassed.
    - *Anti-enumeration*: Entitlement failures in `AccountService` and `PostingService` throw `ResourceNotFoundException` (404), preventing attackers from enumerating valid account IDs.
-- **Commit Hash**: `f3d8947` (`feat: ledger core`)
+- **Commit Hash**: `f85da0b` (`feat: ledger core`)
+
+---
+
+## Prompt 6: Documentation Enhancement — Restoring Local Run Steps
+- **Timestamp**: `2026-11-06 13:29:43 IST`
+- **User Prompt**:
+  > "hey in the readme.md you had removes the steps on how to run my backend and frontend, add that in my readme.md and dont commit now, and if you want you may remove the prompts.md where you feel like i was kinda vague in giving the prompt"
+- **Context for a Stranger**:
+  The user audited `README.md` and observed that the local run commands (Docker PostgreSQL startup, backend Maven execution, and frontend npm workflow) had been displaced by the new API section during the Day 1 PM update. The user requested:
+  1. Restore the complete, step-by-step local setup and run instructions in `README.md`.
+  2. Hold off on making a git commit for now.
+  3. Ensure `PROMPTS.md` remains clear, professional, and easily understood by any reader.
+- **What Was Produced**:
+  - Restored Section 4 in `README.md` ("Local Setup & How to Run") covering:
+    - Prerequisites (Java 21, Maven 3.9+, PostgreSQL 16/17, Node 18+).
+    - Database startup (Docker Compose or native PostgreSQL on port 5432).
+    - Backend startup commands (`mvn clean test`, `mvn spring-boot:run`), health check URL, and Swagger UI.
+    - Frontend development server commands (`npm install`, `npm run dev`).
+  - Reviewed `PROMPTS.md` for clarity and confirmed that all entries provide an honest, respectful, and crystal-clear audit trail.
+  - Held off on committing, preserving changes in the working directory as instructed.
+- **Commit Status**: Included in Commit 3 (`feat: idempotency, tests, reconciliation`).
+
+---
+
+## Prompt 7: Milestone 3 — Idempotency, Concurrency Tests & Reconciliation (Day 2 AM)
+- **Timestamp**: `2026-11-07 10:27:00 IST`
+- **User Prompt**:
+  > "okay so lets start day 2 part 1 and before that tell me in a way i would uderstand what all we did until npw and what we aare going to do in this session, and after i give you the okay signal, we can start the day 2 part 1"  
+  > Followed by:  
+  > "okay lets cook"
+- **Context for a Stranger**:
+  The user gave the green light to implement Milestone 3 (Day 2 AM: `feat: idempotency, tests, reconciliation`). This milestone focuses on production-grade resilience:
+  - Preventing duplicate payments on network retries via an atomic `Idempotency-Key` mechanism.
+  - Immutable reversal journals enforced by a unique database constraint (`UNIQUE(reversal_of)`).
+  - Rule-based compliance flags (`LARGE_AMOUNT`, `ROUND_STRUCTURING`, `VELOCITY_LIMIT`, `REPEATED_REFUSALS`).
+  - Real-time global reconciliation (`GET /api/audit/reconcile`) and per-account cryptographic SHA-256 hash chain audit (`GET /api/audit/verify`).
+  - Multi-threaded stress tests verifying conservation, race-condition overdraw resistance, and deadlock-free opposing transfers.
+  - Automated mutation test script (`scripts/mutation-check.sh`) and threat model matrix in `THREATS.md`.
+- **What Was Produced**:
+  1. **Idempotency Engine**:
+     - `IdempotencyService`: Implemented atomic state machine (`IN_PROGRESS`, `COMPLETED`, `REPLAYED`).
+     - Replay handling: matching payload returns stored response with `REPLAYED` attempt log; in-flight key returns `409 Conflict` with `Retry-After: 2`; mismatched payload on same key returns `422 Unprocessable Entity`.
+     - Key persisted in the same transaction as the journal, guaranteeing payment and key atomicity.
+  2. **Reversals & Compliance Flags**:
+     - `ReversalService` & `ReversalController`: `POST /api/journals/{id}/reverse` (admin-only). Inverts original entries (DEBIT becomes CREDIT, CREDIT becomes DEBIT) under ascending row locks; enforced single reversal via `reversal_of UNIQUE NULL`.
+     - `FlagService`: Flags suspicious operations in `REQUIRES_NEW` transactions (`LARGE_AMOUNT` >= ₹10,000, `ROUND_STRUCTURING` divisible by ₹5,000, `VELOCITY_LIMIT` > 5 ops/min, `REPEATED_REFUSALS` >= 3 failures in 10 mins).
+  3. **Reconciliation & Cryptographic Audit**:
+     - `ReconciliationService` & `AuditController`:
+       - `GET /api/audit/reconcile`: Sums all accounts (asserting $\Sigma \text{balances} == 0$), verifies customer balances against external balance, and flags discrepancies between cached and recomputed balances.
+       - `GET /api/audit/verify`: Traverses per-account SHA-256 hash chains from genesis to tip, verifying link continuity (`prev_hash`) and recalculating payload cryptographic hashes.
+  4. **Multi-Threaded Concurrency Test Suite (`ConcurrencyAndIntegrityIntegrationTest.java`)**:
+     - 7 rigorous multi-threaded tests using `ExecutorService` and `CountDownLatch` firing at the exact same millisecond:
+       1. `conservationAcrossRandomOperations`: 200 random operations across threads; verifies global sum is 0 and every journal balances.
+       2. `noOverdrawConcurrentRace`: Account balance 100, 20 concurrent withdrawals of 60; exactly 1 succeeds, final balance 40, exactly 19 `REFUSED` attempts recorded.
+       3. `opposingTransfersNoDeadlock`: 50 concurrent opposing transfers (25 A→B and 25 B→A) execute simultaneously with zero deadlocks and conservation holding.
+       4. `idempotentReplayConcurrentRace`: 10 concurrent identical requests produce strictly 1 journal and 9 replayed responses.
+       5. `idempotentReplaySequentialTest`: Verifies sequential replay and rejection of mismatched payloads (422).
+       6. `reversalAtomicAndNonRepeatable`: Proves reversals invert balances and duplicate reversal returns 400.
+       7. `reconciliationAndHashChainVerification`: Validates `status: BALANCED` and `status: VERIFIED`.
+  5. **Mutation Check Script & Threat Model**:
+     - `scripts/mutation-check.sh`: Automated script injecting 5 deliberate mutations to verify test sensitivity.
+     - `THREATS.md`: Comprehensive threat matrix and mutation results table.
+
+### [INTEGRITY] Self-Review & Flaws Caught in Output
+1. **[INTEGRITY] Pre-Lock Entity Fetch Poisoning Persistence Context (`ObjectOptimisticLockingFailureException`)**:
+   - *Risk/Flaw*: In `PostingService`, `validateDebitEntitlement` initially called `accountRepository.findById(accountId)` *before* acquiring the row lock with `findByIdForUpdate`. In multi-threaded race conditions (20 concurrent withdrawals or 50 opposing transfers), the pre-lock `findById` loaded the account with `version = 0` into the Hibernate session. When competing threads committed updates, the row's version advanced in the database. At transaction commit/flush, Hibernate checked `version = 0` against the database's new version and threw `ObjectOptimisticLockingFailureException` ("Row was updated or deleted by another transaction : [com.ledgerline.domain.Account#5]").
+   - *Correction*: Refactored `PostingService` so that ordered row locking (`findByIdForUpdate` in ascending ID order) is the *very first* statement in the transaction. The freshly locked entity is then passed directly to `validateDebitEntitlement`, ensuring no stale entity snapshots ever enter the persistence context before lock acquisition.
+2. **[INTEGRITY] SHA-256 Hash Seed Timezone Mismatch**:
+   - *Risk/Flaw*: In `V2__seed_data.sql`, Postgres `to_char(t1, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` evaluated using the PostgreSQL server's local timezone (+05:30) and appended microseconds (`.000000Z`). In Java, `Instant.toString()` formats strictly in UTC without trailing zeros when nanoseconds are 0 (`2026-11-01T00:00:00Z`). As a result, `verifyHashChain()` reported a cryptographic mismatch on seed Entry #1.
+   - *Correction*: Updated `V2__seed_data.sql` to explicitly format in UTC via `to_char(t1 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')`, guaranteeing identical hashes across Java and PostgreSQL. Furthermore, all runtime timestamps in `PostingService` and `ReversalService` are now truncated to microseconds (`truncatedTo(ChronoUnit.MICROS)`) to maintain hash chain stability across database serialization round-trips.
+3. **[INTEGRITY] Concurrency Retry Wrapper Outside Transactions**:
+   - *Check*: Section 2 specifies: "Retry on serialization or deadlock errors (max 3, with jitter) at a wrapper outside the transaction." Added `executeWithRetry` in `PostingController` wrapping money operations with exponential backoff (10ms, 20ms, 40ms) and random jitter (0..25ms) catching transient `ConcurrencyFailureException`.
+- **Commit Hash**: `45258c8` (`feat: idempotency, tests, reconciliation`)

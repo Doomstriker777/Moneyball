@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class PostingService {
@@ -30,6 +31,7 @@ public class PostingService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final AttemptLoggingService attemptLoggingService;
     private final HashService hashService;
+    private final FlagService flagService;
 
     public PostingService(
             AccountRepository accountRepository,
@@ -37,13 +39,15 @@ public class PostingService {
             JournalRepository journalRepository,
             LedgerEntryRepository ledgerEntryRepository,
             AttemptLoggingService attemptLoggingService,
-            HashService hashService) {
+            HashService hashService,
+            FlagService flagService) {
         this.accountRepository = accountRepository;
         this.accountMemberRepository = accountMemberRepository;
         this.journalRepository = journalRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.attemptLoggingService = attemptLoggingService;
         this.hashService = hashService;
+        this.flagService = flagService;
     }
 
     /**
@@ -66,9 +70,6 @@ public class PostingService {
             throw new IllegalArgumentException("Source and destination accounts must be distinct");
         }
 
-        // Entitlement check on source account (debit source)
-        validateDebitEntitlement(sourceId, user, request.getAmount(), idempotencyKey, JournalKind.TRANSFER);
-
         // Pessimistic locking in strictly ascending ID order to eliminate deadlock cycles
         Long firstId = Math.min(sourceId, destinationId);
         Long secondId = Math.max(sourceId, destinationId);
@@ -80,6 +81,9 @@ public class PostingService {
 
         Account sourceAccount = sourceId.equals(firstId) ? firstAccount : secondAccount;
         Account destinationAccount = destinationId.equals(firstId) ? firstAccount : secondAccount;
+
+        // Entitlement check on source account (debit source) under row lock
+        validateDebitEntitlement(sourceAccount, user, request.getAmount(), idempotencyKey, JournalKind.TRANSFER);
 
         // Verify account statuses under lock
         if (sourceAccount.getStatus() != AccountStatus.ACTIVE) {
@@ -104,10 +108,11 @@ public class PostingService {
         long amount = request.getAmount();
 
         if (sourceBalance - amount < -overdraftLimit) {
-            attemptLoggingService.logRefusal(
+            LedgerAttempt attempt = attemptLoggingService.logRefusal(
                     sourceId, user.getId(), JournalKind.TRANSFER, amount,
                     "Insufficient funds (Balance: " + sourceBalance + " paise, Required: " + amount + " paise)", idempotencyKey
             );
+            flagService.evaluateRefusalFlags(attempt.getId(), sourceId, user.getId());
             throw new InsufficientFundsException(
                     "Insufficient funds. Current balance: " + formatPaise(sourceBalance) + ", overdraft limit: " + formatPaise(overdraftLimit)
             );
@@ -121,7 +126,7 @@ public class PostingService {
                 .build();
         journal = journalRepository.save(journal);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         // 1. Debit Source Account (reduces balance)
         long newSourceBalance = sourceBalance - amount;
@@ -196,7 +201,6 @@ public class PostingService {
         validateWriteAuthorization(user);
 
         Long accountId = request.getAccountId();
-        validateAccountOwnershipOrAdmin(accountId, user);
 
         // Ordered lock: EXTERNAL (ID 1) first, then Customer account
         Long firstId = Math.min(EXTERNAL_ACCOUNT_ID, accountId);
@@ -209,6 +213,8 @@ public class PostingService {
 
         Account externalAccount = EXTERNAL_ACCOUNT_ID.equals(firstId) ? firstAccount : secondAccount;
         Account customerAccount = accountId.equals(firstId) ? firstAccount : secondAccount;
+
+        validateAccountOwnershipOrAdmin(customerAccount, user);
 
         if (customerAccount.getStatus() != AccountStatus.ACTIVE) {
             attemptLoggingService.logRefusal(
@@ -227,7 +233,7 @@ public class PostingService {
                 .build();
         journal = journalRepository.save(journal);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         // 1. Debit EXTERNAL System Account
         long newExternalBalance = externalAccount.getBalance() - amount;
@@ -301,7 +307,6 @@ public class PostingService {
         validateWriteAuthorization(user);
 
         Long accountId = request.getAccountId();
-        validateDebitEntitlement(accountId, user, request.getAmount(), idempotencyKey, JournalKind.WITHDRAWAL);
 
         // Ordered lock: EXTERNAL (ID 1) first, then Customer account
         Long firstId = Math.min(EXTERNAL_ACCOUNT_ID, accountId);
@@ -314,6 +319,8 @@ public class PostingService {
 
         Account externalAccount = EXTERNAL_ACCOUNT_ID.equals(firstId) ? firstAccount : secondAccount;
         Account customerAccount = accountId.equals(firstId) ? firstAccount : secondAccount;
+
+        validateDebitEntitlement(customerAccount, user, request.getAmount(), idempotencyKey, JournalKind.WITHDRAWAL);
 
         if (customerAccount.getStatus() != AccountStatus.ACTIVE) {
             attemptLoggingService.logRefusal(
@@ -328,10 +335,11 @@ public class PostingService {
         long amount = request.getAmount();
 
         if (balance - amount < -overdraftLimit) {
-            attemptLoggingService.logRefusal(
+            LedgerAttempt attempt = attemptLoggingService.logRefusal(
                     accountId, user.getId(), JournalKind.WITHDRAWAL, amount,
                     "Insufficient funds (Balance: " + balance + " paise, Required: " + amount + " paise)", idempotencyKey
             );
+            flagService.evaluateRefusalFlags(attempt.getId(), accountId, user.getId());
             throw new InsufficientFundsException(
                     "Insufficient funds. Current balance: " + formatPaise(balance) + ", overdraft limit: " + formatPaise(overdraftLimit)
             );
@@ -344,7 +352,7 @@ public class PostingService {
                 .build();
         journal = journalRepository.save(journal);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         // 1. Debit Customer Account
         long newCustomerBalance = balance - amount;
@@ -427,14 +435,12 @@ public class PostingService {
         }
     }
 
-    private void validateDebitEntitlement(Long accountId, User user, Long amount, String idempotencyKey, JournalKind kind) {
+    private void validateDebitEntitlement(Account account, User user, Long amount, String idempotencyKey, JournalKind kind) {
         if (user.getRole() == Role.ADMIN) {
             return;
         }
 
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
-
+        Long accountId = account.getId();
         boolean isOwner = account.getOwnerId().equals(user.getId());
         boolean isMember = accountMemberRepository.existsByUserIdAndAccountId(user.getId(), accountId);
 
@@ -449,14 +455,12 @@ public class PostingService {
         }
     }
 
-    private void validateAccountOwnershipOrAdmin(Long accountId, User user) {
+    private void validateAccountOwnershipOrAdmin(Account account, User user) {
         if (user.getRole() == Role.ADMIN) {
             return;
         }
 
-        Account account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
-
+        Long accountId = account.getId();
         boolean isOwner = account.getOwnerId().equals(user.getId());
         boolean isMember = accountMemberRepository.existsByUserIdAndAccountId(user.getId(), accountId);
 

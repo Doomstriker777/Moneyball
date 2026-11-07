@@ -24,3 +24,4 @@ public class PostingResponse {
     private Long destinationBalanceAfter;
     private Instant createdAt;
 }
+

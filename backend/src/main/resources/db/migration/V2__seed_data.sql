@@ -48,22 +48,22 @@ DECLARE
     t2 TIMESTAMPTZ := '2026-11-01 00:01:00+00';
 BEGIN
     -- Entry 1 (EXT-000000): prev_hash is NULL
-    h_ext_1 := encode(digest('' || 1::text || 1::text || 'DEBIT' || 100000::text || (-100000)::text || to_char(t1, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), 'sha256'), 'hex');
+    h_ext_1 := encode(digest('' || 1::text || 1::text || 'DEBIT' || 100000::text || (-100000)::text || to_char(t1 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'sha256'), 'hex');
     INSERT INTO ledger_entries (id, journal_id, account_id, direction, amount, balance_after, prev_hash, hash, created_at)
     VALUES (1, 1, 1, 'DEBIT', 100000, -100000, NULL, h_ext_1, t1);
 
     -- Entry 2 (ACC-100001): prev_hash is NULL
-    h_acc1_1 := encode(digest('' || 2::text || 1::text || 'CREDIT' || 100000::text || 100000::text || to_char(t1, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), 'sha256'), 'hex');
+    h_acc1_1 := encode(digest('' || 2::text || 1::text || 'CREDIT' || 100000::text || 100000::text || to_char(t1 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'sha256'), 'hex');
     INSERT INTO ledger_entries (id, journal_id, account_id, direction, amount, balance_after, prev_hash, hash, created_at)
     VALUES (2, 1, 2, 'CREDIT', 100000, 100000, NULL, h_acc1_1, t1);
 
     -- Entry 3 (EXT-000000): prev_hash is h_ext_1
-    h_ext_2 := encode(digest(h_ext_1 || 1::text || 2::text || 'DEBIT' || 50000::text || (-150000)::text || to_char(t2, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), 'sha256'), 'hex');
+    h_ext_2 := encode(digest(h_ext_1 || 1::text || 2::text || 'DEBIT' || 50000::text || (-150000)::text || to_char(t2 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'sha256'), 'hex');
     INSERT INTO ledger_entries (id, journal_id, account_id, direction, amount, balance_after, prev_hash, hash, created_at)
     VALUES (3, 2, 1, 'DEBIT', 50000, -150000, h_ext_1, h_ext_2, t2);
 
     -- Entry 4 (ACC-100002): prev_hash is NULL
-    h_acc2_1 := encode(digest('' || 3::text || 2::text || 'CREDIT' || 50000::text || 50000::text || to_char(t2, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), 'sha256'), 'hex');
+    h_acc2_1 := encode(digest('' || 3::text || 2::text || 'CREDIT' || 50000::text || 50000::text || to_char(t2 AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'sha256'), 'hex');
     INSERT INTO ledger_entries (id, journal_id, account_id, direction, amount, balance_after, prev_hash, hash, created_at)
     VALUES (4, 2, 3, 'CREDIT', 50000, 50000, NULL, h_acc2_1, t2);
 END $$;
