@@ -1,13 +1,11 @@
 package com.ledgerline.service;
 
-import com.ledgerline.domain.Account;
-import com.ledgerline.domain.AccountType;
-import com.ledgerline.domain.LedgerEntry;
+import com.ledgerline.domain.*;
+import com.ledgerline.dto.AccountResponse;
+import com.ledgerline.dto.AuditPackResponse;
 import com.ledgerline.dto.HashChainVerificationReport;
 import com.ledgerline.dto.ReconciliationReport;
-import com.ledgerline.repository.AccountRepository;
-import com.ledgerline.repository.JournalRepository;
-import com.ledgerline.repository.LedgerEntryRepository;
+import com.ledgerline.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +19,22 @@ public class ReconciliationService {
     private final AccountRepository accountRepository;
     private final JournalRepository journalRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final LedgerAttemptRepository ledgerAttemptRepository;
+    private final FlagRepository flagRepository;
     private final HashService hashService;
 
     public ReconciliationService(
             AccountRepository accountRepository,
             JournalRepository journalRepository,
             LedgerEntryRepository ledgerEntryRepository,
+            LedgerAttemptRepository ledgerAttemptRepository,
+            FlagRepository flagRepository,
             HashService hashService) {
         this.accountRepository = accountRepository;
         this.journalRepository = journalRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
+        this.ledgerAttemptRepository = ledgerAttemptRepository;
+        this.flagRepository = flagRepository;
         this.hashService = hashService;
     }
 
@@ -150,6 +154,48 @@ public class ReconciliationService {
                 .totalEntriesScanned(totalScanned)
                 .totalAccountsScanned(accounts.size())
                 .timestamp(Instant.now())
+                .build();
+    }
+
+    /**
+     * Exports complete ledger audit pack for offline cryptographic verification by auditors.
+     */
+    @Transactional(readOnly = true)
+    public AuditPackResponse exportAuditPack(User user) {
+        ReconciliationReport rec = performReconciliation();
+        HashChainVerificationReport verify = verifyHashChain();
+        List<AccountResponse> accounts = accountRepository.findAll().stream()
+                .map(AccountResponse::fromEntity)
+                .toList();
+        List<LedgerEntry> entries = ledgerEntryRepository.findAll();
+        List<LedgerAttempt> attempts = ledgerAttemptRepository.findAll();
+        List<Flag> flags = flagRepository.findAll();
+
+        String instructions = """
+                LedgerLine Offline Audit Verification Guide:
+                1. Verify Invariant: The algebraic sum of all account balances (including EXT-000000) must equal 0.
+                2. Verify Double-Entry Balance: For each journal, SUM(credits) must equal SUM(debits).
+                3. Verify Cryptographic Hash Chain per Account:
+                   For each entry in an account ordered chronologically from genesis to tip:
+                   data = (prev_hash || account_id || journal_id || direction || amount || balance_after || created_at)
+                   recomputed_hash = sha256(data)
+                   assert recomputed_hash == entry.hash
+                   assert next_entry.prev_hash == current_entry.hash
+                4. Verify Refusal Log: Every refusal in ledger_attempts has outcome = REFUSED and no matching journal.
+                """;
+
+        return AuditPackResponse.builder()
+                .system("LedgerLine Double-Entry Core Engine")
+                .exportVersion("1.0.0")
+                .exportedAt(Instant.now())
+                .exportedBy(user != null ? user.getEmail() : "AUDITOR")
+                .reconciliation(rec)
+                .hashVerification(verify)
+                .accounts(accounts)
+                .ledgerEntries(entries)
+                .ledgerAttempts(attempts)
+                .complianceFlags(flags)
+                .offlineVerificationInstructions(instructions)
                 .build();
     }
 }

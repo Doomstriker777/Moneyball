@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-export type StampOutcome = 'POSTED' | 'REFUSED' | 'REPLAYED' | 'REVERSED';
+export type StampOutcome = 'POSTED' | 'REFUSED' | 'REPLAYED' | 'REVERSED' | 'VERIFIED' | 'BROKEN';
 
 interface RubberStampProps {
   outcome: StampOutcome;
@@ -53,6 +53,22 @@ const STAMP_CONFIG: Record<
     shadow: '0 4px 12px rgba(154, 91, 19, 0.25)',
     defaultRotation: 2.8,
     title: 'REVERSED',
+  },
+  VERIFIED: {
+    border: '3px solid #1E4E38',
+    color: '#1E4E38',
+    bg: 'rgba(30, 78, 56, 0.1)',
+    shadow: '0 4px 12px rgba(30, 78, 56, 0.25)',
+    defaultRotation: -2.0,
+    title: 'VERIFIED',
+  },
+  BROKEN: {
+    border: '3px solid #B33927',
+    color: '#B33927',
+    bg: 'rgba(179, 57, 39, 0.12)',
+    shadow: '0 4px 12px rgba(179, 57, 39, 0.3)',
+    defaultRotation: 4.5,
+    title: 'TAMPERED',
   },
 };
 
@@ -154,3 +170,4 @@ export const RubberStamp: React.FC<RubberStampProps> = ({
     </motion.div>
   );
 };
+

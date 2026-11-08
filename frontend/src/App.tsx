@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Header } from './components/Header';
+import { Header, NavTab } from './components/Header';
 import { AccountCard } from './components/AccountCard';
 import { TransferModal } from './components/TransferModal';
 import { DepositModal } from './components/DepositModal';
 import { WithdrawalModal } from './components/WithdrawalModal';
 import { StatementModal } from './components/StatementModal';
 import { LoginModal } from './components/LoginModal';
+import { ProofPanel } from './components/ProofPanel';
+import { AdminPanel } from './components/AdminPanel';
+import { AttackLab } from './components/AttackLab';
 import { api } from './api/client';
 import { Account } from './types';
 import { formatPaise } from './utils/formatters';
-import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +27,8 @@ const queryClient = new QueryClient({
 
 function DashboardContent() {
   const { user } = useAuth();
+  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [isExportingAuditPack, setIsExportingAuditPack] = useState<boolean>(false);
   const [selectedTransferAccount, setSelectedTransferAccount] = useState<Account | null>(null);
   const [selectedDepositAccount, setSelectedDepositAccount] = useState<Account | null>(null);
   const [selectedWithdrawAccount, setSelectedWithdrawAccount] = useState<Account | null>(null);
@@ -56,6 +61,27 @@ function DashboardContent() {
     refetchReconciliation();
   };
 
+  const handleExportAuditPack = async () => {
+    try {
+      setIsExportingAuditPack(true);
+      const pack = await api.exportAuditPack();
+      const jsonStr = JSON.stringify(pack, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `moneyball-audit-pack-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Failed to export audit pack: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsExportingAuditPack(false);
+    }
+  };
+
   const customerAccounts = accounts.filter((a) => a.type === 'CUSTOMER');
   const systemAccount = accounts.find((a) => a.type === 'SYSTEM');
 
@@ -63,10 +89,14 @@ function DashboardContent() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--color-paper)' }}>
-      {/* Sticky Header with 1-Click Role Switcher */}
+      {/* Sticky Header with 1-Click Role Switcher & Tab Nav */}
       <Header
         onOpenLogin={() => setIsLoginOpen(true)}
         systemConservationStatus={reconciliation?.conservationHolds ? 'BALANCED' : 'DISCREPANCY'}
+        currentTab={currentTab}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        onExportAuditPack={handleExportAuditPack}
+        isExportingAuditPack={isExportingAuditPack}
       />
 
       {/* Auditor Notice Banner */}
@@ -75,7 +105,7 @@ function DashboardContent() {
           style={{
             backgroundColor: 'var(--color-saffron-light)',
             borderBottom: '1px solid var(--color-saffron)',
-            padding: '0.5rem 1.5rem',
+            padding: '0.6rem 1.5rem',
             textAlign: 'center',
             fontSize: '0.82rem',
             fontFamily: 'var(--font-mono)',
@@ -83,164 +113,193 @@ function DashboardContent() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '0.5rem',
+            gap: '1rem',
+            flexWrap: 'wrap',
           }}
         >
-          <AlertTriangle size={15} color="var(--color-saffron)" />
-          <strong>AUDITOR INSPECTION MODE</strong>: Read-only access enabled. All write operations (transfers, deposits, withdrawals) are blocked with HTTP 403.
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={15} color="var(--color-saffron)" />
+            <strong>AUDITOR INSPECTION MODE</strong>: Read-only access enabled. All write operations (transfers, deposits, withdrawals) are blocked with HTTP 403.
+          </div>
+          <button
+            onClick={handleExportAuditPack}
+            disabled={isExportingAuditPack}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.25rem 0.65rem',
+              backgroundColor: 'var(--color-stamp-saffron, #9A5B13)',
+              color: '#FFF8EE',
+              border: 'none',
+              borderRadius: '3px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: isExportingAuditPack ? 'wait' : 'pointer',
+            }}
+          >
+            <Download size={13} />
+            {isExportingAuditPack ? 'Generating Pack...' : 'Download Complete Audit Pack (.json)'}
+          </button>
         </div>
       )}
 
       {/* Main Ruled Ledger Canvas */}
-      <main style={{ flex: 1, padding: '2rem 1.5rem', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        {/* Ledger Page Sheet */}
-        <div className="ledger-page" style={{ padding: '2.5rem', borderRadius: '4px' }}>
-          <div style={{ marginLeft: '60px' }}>
-            {/* Top Sheet Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
-              <div>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2.25rem', letterSpacing: '-0.02em', color: 'var(--color-ink)', lineHeight: 1.1 }}>
-                  The Living Ledger
-                </h2>
-                <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.95rem', marginTop: '0.35rem' }}>
-                  Double-entry core banking engine. Strict integer paise math. Zero floating-point drift.
-                </p>
-              </div>
+      <main style={{ flex: 1, padding: '1.5rem 1rem', maxWidth: '1280px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+        {currentTab === 'proof' && <ProofPanel />}
+        {currentTab === 'admin' && (user?.role === 'ADMIN' ? <AdminPanel /> : <div style={{ padding: '3rem', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>Admin privileges required.</div>)}
+        {currentTab === 'attack' && <AttackLab />}
 
-              {/* Refresh Button */}
-              <button
-                onClick={() => { refetchAccounts(); refetchReconciliation(); }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.45rem 0.85rem',
-                  backgroundColor: 'var(--color-paper-light)',
-                  border: '1px solid rgba(47, 93, 80, 0.3)',
-                  borderRadius: '4px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  color: 'var(--color-rule-green)',
-                }}
-              >
-                <RefreshCw size={13} /> Refresh Ledger
-              </button>
-            </div>
+        {currentTab === 'dashboard' && (
+          <div className="ledger-page" style={{ padding: '2.5rem', borderRadius: '4px' }}>
+            <div style={{ marginLeft: '60px' }}>
+              {/* Top Sheet Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '2.25rem', letterSpacing: '-0.02em', color: 'var(--color-ink)', lineHeight: 1.1 }}>
+                    The Living Ledger
+                  </h2>
+                  <p style={{ color: 'var(--color-ink-muted)', fontSize: '0.95rem', marginTop: '0.35rem' }}>
+                    Double-entry core banking engine. Strict integer paise math. Zero floating-point drift.
+                  </p>
+                </div>
 
-            {/* Invariant & Metrics Strip */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '1rem',
-                marginBottom: '2rem',
-              }}
-            >
-              {/* Metric 1: Conservation Sum */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-paper)',
-                  border: '1px solid rgba(47, 93, 80, 0.25)',
-                  borderRadius: '4px',
-                  padding: '1rem 1.25rem',
-                }}
-              >
-                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
-                  Global Conservation Sum
-                </div>
-                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-rule-green)' }}>
-                  ₹0.00
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                  Σ(Customers + External) ≡ 0
-                </div>
-              </div>
-
-              {/* Metric 2: Customer Deposits Total */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-paper)',
-                  border: '1px solid rgba(47, 93, 80, 0.25)',
-                  borderRadius: '4px',
-                  padding: '1rem 1.25rem',
-                }}
-              >
-                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
-                  Total Customer Balances
-                </div>
-                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-ink)' }}>
-                  {formatPaise(totalCustomerPaise)}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                  {customerAccounts.length} Customer Accounts active
-                </div>
-              </div>
-
-              {/* Metric 3: External World Offset */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-paper)',
-                  border: '1px solid rgba(47, 93, 80, 0.25)',
-                  borderRadius: '4px',
-                  padding: '1rem 1.25rem',
-                }}
-              >
-                <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
-                  External System Offset
-                </div>
-                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-stamp-vermilion)' }}>
-                  {formatPaise(systemAccount?.balance ?? -totalCustomerPaise)}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                  EXT-000000 (Simulated Outside World)
-                </div>
-              </div>
-            </div>
-
-            {/* Account Grid */}
-            <div style={{ marginBottom: '2.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid rgba(47, 93, 80, 0.2)', paddingBottom: '0.5rem' }}>
-                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.35rem', color: 'var(--color-rule-green)' }}>
-                  Ledger Accounts
-                </h3>
-                <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
-                  Showing accounts entitled to <strong>{user?.email || 'Anonymous'}</strong>
-                </span>
-              </div>
-
-              {isLoadingAccounts ? (
-                <div style={{ textAlign: 'center', padding: '3rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
-                  <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem' }} />
-                  <div>Loading accounts from PostgreSQL ledger...</div>
-                </div>
-              ) : accounts.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-ink-muted)', fontStyle: 'italic' }}>
-                  No accounts found or you are not signed in. Use the demo switcher above to select a role.
-                </div>
-              ) : (
-                <div
+                {/* Refresh Button */}
+                <button
+                  onClick={() => { refetchAccounts(); refetchReconciliation(); }}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                    gap: '1.5rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.45rem 0.85rem',
+                    backgroundColor: 'var(--color-paper-light)',
+                    border: '1px solid rgba(47, 93, 80, 0.3)',
+                    borderRadius: '4px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    color: 'var(--color-rule-green)',
                   }}
                 >
-                  {accounts.map((account) => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      onTransfer={(acc) => setSelectedTransferAccount(acc)}
-                      onDeposit={(acc) => setSelectedDepositAccount(acc)}
-                      onWithdraw={(acc) => setSelectedWithdrawAccount(acc)}
-                      onViewStatement={(acc) => setSelectedStatementAccount(acc)}
-                    />
-                  ))}
+                  <RefreshCw size={13} /> Refresh Ledger
+                </button>
+              </div>
+
+              {/* Invariant & Metrics Strip */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: '1rem',
+                  marginBottom: '2rem',
+                }}
+              >
+                {/* Metric 1: Conservation Sum */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-paper)',
+                    border: '1px solid rgba(47, 93, 80, 0.25)',
+                    borderRadius: '4px',
+                    padding: '1rem 1.25rem',
+                  }}
+                >
+                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                    Global Conservation Sum
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-rule-green)' }}>
+                    ₹0.00
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                    Σ(Customers + External) ≡ 0
+                  </div>
                 </div>
-              )}
+
+                {/* Metric 2: Customer Deposits Total */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-paper)',
+                    border: '1px solid rgba(47, 93, 80, 0.25)',
+                    borderRadius: '4px',
+                    padding: '1rem 1.25rem',
+                  }}
+                >
+                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                    Total Customer Balances
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-ink)' }}>
+                    {formatPaise(totalCustomerPaise)}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                    {customerAccounts.length} Customer Accounts active
+                  </div>
+                </div>
+
+                {/* Metric 3: External World Offset */}
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-paper)',
+                    border: '1px solid rgba(47, 93, 80, 0.25)',
+                    borderRadius: '4px',
+                    padding: '1rem 1.25rem',
+                  }}
+                >
+                  <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)', marginBottom: '0.25rem' }}>
+                    External System Offset
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', fontWeight: 800, color: 'var(--color-stamp-vermilion)' }}>
+                    {formatPaise(systemAccount?.balance ?? -totalCustomerPaise)}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--color-ink-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                    EXT-000000 (Simulated Outside World)
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Grid */}
+              <div style={{ marginBottom: '2.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid rgba(47, 93, 80, 0.2)', paddingBottom: '0.5rem' }}>
+                  <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.35rem', color: 'var(--color-rule-green)' }}>
+                    Ledger Accounts
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                    Showing accounts entitled to <strong>{user?.email || 'Anonymous'}</strong>
+                  </span>
+                </div>
+
+                {isLoadingAccounts ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                    <RefreshCw size={24} className="spin" style={{ marginBottom: '0.5rem' }} />
+                    <div>Loading accounts from PostgreSQL ledger...</div>
+                  </div>
+                ) : accounts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-ink-muted)', fontStyle: 'italic' }}>
+                    No accounts found or you are not signed in. Use the demo switcher above to select a role.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                      gap: '1.5rem',
+                    }}
+                  >
+                    {accounts.map((account) => (
+                      <AccountCard
+                        key={account.id}
+                        account={account}
+                        onTransfer={(acc) => setSelectedTransferAccount(acc)}
+                        onDeposit={(acc) => setSelectedDepositAccount(acc)}
+                        onWithdraw={(acc) => setSelectedWithdrawAccount(acc)}
+                        onViewStatement={(acc) => setSelectedStatementAccount(acc)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Modals */}

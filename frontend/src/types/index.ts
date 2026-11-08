@@ -116,3 +116,42 @@ export interface HashChainVerificationReport {
   failureReason?: string;
   timestamp: string;
 }
+
+export type FlagSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type FlagStatus = 'OPEN' | 'REVIEWED' | 'DISMISSED';
+
+export interface Flag {
+  id: number;
+  journalId?: number;
+  attemptId?: number;
+  rule: string;
+  severity: FlagSeverity;
+  status: FlagStatus;
+  reviewedBy?: number;
+  note?: string;
+  createdAt: string;
+}
+
+export interface FlagReviewRequest {
+  note: string;
+}
+
+export interface ReversalRequest {
+  reason: string;
+}
+
+export interface AuditPackResponse {
+  system: string;
+  exportVersion: string;
+  exportedAt: string;
+  exportedBy: string;
+  reconciliation: ReconciliationReport;
+  hashVerification: HashChainVerificationReport;
+  accounts: Account[];
+  ledgerEntries: any[];
+  ledgerAttempts: any[];
+  complianceFlags: Flag[];
+  offlineVerificationInstructions: string;
+}
+
+

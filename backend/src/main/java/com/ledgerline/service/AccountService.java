@@ -135,5 +135,35 @@ public class AccountService {
                 .items(items)
                 .build();
     }
+
+    @Transactional
+    public AccountResponse updateStatus(Long accountId, AccountStatus status, User user) {
+        if (user.getRole() != Role.ADMIN) {
+            throw new org.springframework.security.access.AccessDeniedException("Only Administrators can modify account status.");
+        }
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
+        account.setStatus(status);
+        account = accountRepository.save(account);
+        return AccountResponse.fromEntity(account);
+    }
+
+    @Transactional
+    public AccountResponse updateOverdraftLimit(Long accountId, Long overdraftLimit, User user) {
+        if (user.getRole() != Role.ADMIN) {
+            throw new org.springframework.security.access.AccessDeniedException("Only Administrators can modify overdraft limits.");
+        }
+        if (overdraftLimit < 0) {
+            throw new IllegalArgumentException("Overdraft limit must be non-negative.");
+        }
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
+        if (account.getBalance() < -overdraftLimit) {
+            throw new IllegalArgumentException("New overdraft limit of " + overdraftLimit + " paise would violate current negative balance of " + account.getBalance() + " paise.");
+        }
+        account.setOverdraftLimit(overdraftLimit);
+        account = accountRepository.save(account);
+        return AccountResponse.fromEntity(account);
+    }
 }
 

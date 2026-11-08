@@ -221,3 +221,4 @@ export const StatementModal: React.FC<StatementModalProps> = ({ account, onClose
     </div>
   );
 };
+

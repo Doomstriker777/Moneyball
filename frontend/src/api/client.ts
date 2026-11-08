@@ -7,7 +7,11 @@ import {
   TransferRequest,
   WithdrawalRequest,
   ReconciliationReport,
-  HashChainVerificationReport
+  HashChainVerificationReport,
+  Flag,
+  FlagReviewRequest,
+  ReversalRequest,
+  AuditPackResponse
 } from '../types';
 
 class ApiError extends Error {
@@ -126,7 +130,45 @@ class ApiClient {
   async verifyHashChains(): Promise<HashChainVerificationReport> {
     return this.request<HashChainVerificationReport>('/api/audit/verify');
   }
+
+  async exportAuditPack(): Promise<AuditPackResponse> {
+    return this.request<AuditPackResponse>('/api/audit/export');
+  }
+
+  async getFlags(status?: string): Promise<Flag[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request<Flag[]>(`/api/audit/flags${q}`);
+  }
+
+  async reviewFlag(id: number, request: FlagReviewRequest): Promise<Flag> {
+    return this.request<Flag>(`/api/audit/flags/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify(request)
+    });
+  }
+
+  // --- Account Admin Controls ---
+  async updateAccountStatus(id: number, status: 'ACTIVE' | 'FROZEN'): Promise<Account> {
+    return this.request<Account>(`/api/accounts/${id}/status?status=${encodeURIComponent(status)}`, {
+      method: 'PATCH'
+    });
+  }
+
+  async updateOverdraftLimit(id: number, limitPaise: number): Promise<Account> {
+    return this.request<Account>(`/api/accounts/${id}/overdraft-limit?limit=${limitPaise}`, {
+      method: 'PATCH'
+    });
+  }
+
+  // --- Reversals ---
+  async reverseJournal(journalId: number, request: ReversalRequest, idempotencyKey?: string): Promise<PostingResponse> {
+    return this.request<PostingResponse>(`/api/reversals/${journalId}`, {
+      method: 'POST',
+      body: JSON.stringify(request)
+    }, idempotencyKey);
+  }
 }
 
 export const api = new ApiClient();
 export { ApiError };
+

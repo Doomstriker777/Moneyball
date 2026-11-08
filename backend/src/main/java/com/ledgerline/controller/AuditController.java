@@ -34,13 +34,24 @@ public class AuditController {
         this.flagService = flagService;
     }
 
-    @GetMapping("/reconciliation")
+    @GetMapping({"/reconciliation", "/reconcile"})
     @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @Operation(summary = "Recompute ledger balances and assert conservation",
                description = "Recomputes all balances from raw ledger entries, compares against cached balances, and verifies system sum is 0.")
     public ResponseEntity<ReconciliationReport> getReconciliation() {
         ReconciliationReport report = reconciliationService.performReconciliation();
         return ResponseEntity.ok(report);
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('AUDITOR')")
+    @Operation(summary = "Export complete audit pack",
+               description = "Exports all ledger entries, attempts, flags, verification reports, and offline verification instructions for regulatory audit.")
+    public ResponseEntity<com.ledgerline.dto.AuditPackResponse> exportAuditPack(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        User user = principal != null ? principal.getUser() : null;
+        com.ledgerline.dto.AuditPackResponse pack = reconciliationService.exportAuditPack(user);
+        return ResponseEntity.ok(pack);
     }
 
     @GetMapping("/verify")

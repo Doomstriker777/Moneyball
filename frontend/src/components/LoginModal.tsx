@@ -230,3 +230,4 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose }) => {
     </div>
   );
 };
+

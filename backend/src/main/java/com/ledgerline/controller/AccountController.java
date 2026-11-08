@@ -51,5 +51,29 @@ public class AccountController {
         StatementResponse response = accountService.getStatement(id, user);
         return ResponseEntity.ok(response);
     }
+
+    @PatchMapping("/{id}/status")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Freeze or unfreeze account", description = "Updates account status to ACTIVE or FROZEN. Admin only.")
+    public ResponseEntity<AccountResponse> updateStatus(
+            @PathVariable Long id,
+            @RequestParam com.ledgerline.domain.AccountStatus status,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        User user = principal.getUser();
+        AccountResponse response = accountService.updateStatus(id, status, user);
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}/overdraft-limit")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Set overdraft limit", description = "Sets overdraft limit in paise. Admin only.")
+    public ResponseEntity<AccountResponse> updateOverdraftLimit(
+            @PathVariable Long id,
+            @RequestParam Long limit,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        User user = principal.getUser();
+        AccountResponse response = accountService.updateOverdraftLimit(id, limit, user);
+        return ResponseEntity.ok(response);
+    }
 }
 

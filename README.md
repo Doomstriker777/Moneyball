@@ -100,10 +100,15 @@ Open [`http://localhost:5173`](http://localhost:5173) in your browser to view **
 - `GET /api/accounts/{id}` — Get single account details (returns 404 for unentitled users).
 - `GET /api/accounts/{id}/statement` — Ruled-ledger statement merging posted entries with refused attempts in chronological order.
 
-### Money Operations
-- `POST /api/deposits` — Ingest external funds (Debits EXTERNAL, Credits Customer).
-- `POST /api/withdrawals` — Outgoing cash settlement (Debits Customer, Credits EXTERNAL).
-- `POST /api/transfers` — Internal transfer between accounts with deadlock-free ordered locking.
+### Audit, Compliance & Administration
+- `GET /api/audit/reconcile` — Real-time ledger balance recomputation and zero-sum conservation check.
+- `GET /api/audit/verify` — Cryptographic SHA-256 hash-chain verification across all account entry sequences.
+- `GET /api/audit/export` — Regulatory audit export bundle (.json) with full entry ledgers, attempts, flags, and offline verification instructions (Auditor only).
+- `GET /api/audit/flags` — List triggered anti-fraud / AML compliance flags.
+- `POST /api/audit/flags/{id}/review` — Submit human administrator review note and transition flag to REVIEWED.
+- `PATCH /api/accounts/{id}/status` — Freeze or unfreeze an account (Admin only).
+- `PATCH /api/accounts/{id}/overdraft-limit` — Adjust allowed overdraft limit in paise (Admin only).
+- `POST /api/reversals/{journalId}` — Post immutable equal-and-opposite corrective journal with row locking (Admin only).
 
 ### Example `curl` Calls:
 
@@ -186,12 +191,12 @@ All passwords are encrypted with BCrypt (cost factor 10).
   - [x] Simulated External Deposit & Cash Withdrawal modals tested against double-entry offset and overdraft limits
   - [x] Chronological Ruled-Ledger Statement viewer with running balances and stamp outcomes
   - [x] Real-time invariant header indicator (`● Σ ALL BALANCES = 0`) polling reconciliation status
-- [ ] **Day 3 AM: `feat(ui): statement, proof, admin, attack lab`**
-  - [ ] Ruled-ledger statement view with animated outcome stamps
-  - [ ] Live Proof Panel (`Σ balances = 0`, cryptographic seal status)
-  - [ ] Admin management panels (users, overdrafts, flags, reversals)
-  - [ ] Auditor read-only mode with watermark
-  - [ ] Interactive Attack Lab (concurrency race simulation)
+- [x] **Day 3 AM: `feat(ui): statement, proof, admin, attack lab`**
+  - [x] Ruled-ledger statement view with animated outcome stamps (`POSTED`, `REFUSED`, `REPLAYED`, `REVERSED`)
+  - [x] Live Proof Panel ($\Sigma \text{balances} \equiv 0$ equation breakdown, discrepancy scanner, SHA-256 seal)
+  - [x] Admin management panels (account freeze/unfreeze, overdraft limits, compliance flag review, journal reversals)
+  - [x] Auditor read-only mode with watermark and one-click JSON audit pack export (`GET /api/audit/export`)
+  - [x] Interactive Attack Lab (20-thread parallel withdrawal race, 10-thread idempotency replay, overdraft breach)
 - [ ] **Day 3 PM: `chore: deploy, docs, hardening`**
   - [ ] Dockerfile and cloud deployment configuration (Render + Netlify)
   - [ ] CORS allow-listing and environment configuration

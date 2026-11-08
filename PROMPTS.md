@@ -276,3 +276,51 @@
    - *Issue*: `tsc -b` caught unused imports across components (`React`, `Landmark`, `ShieldCheck`).
    - *Correction*: Purged unused symbols; verified clean production build (`dist/`) in 6.17s.
 - **Commit Hash**: `494d949` (`feat(ui): design system, auth, dashboard, transfer`)
+
+
+---
+
+## Prompt 10: Milestone 5 — Proof Panel, Admin Controls, Auditor Mode & Attack Lab (Day 3 AM)
+- **Timestamp**: `2026-11-08 17:34:55 IST`
+- **User Prompt**:
+  > "lets do the day 3 part 1 lets goo"
+- **Context for a Stranger**:
+  The user initiated Milestone 5 (Day 3 AM: `feat(ui): statement, proof, admin, attack lab`). The goal of this milestone was to equip the Moneyball / LedgerLine platform with full auditability, administrative control, mathematical proof verification, and an interactive adversarial attack lab.
+- **What Was Produced**:
+  1. **Backend Audit & Administration Extensions**:
+     - `AuditPackResponse.java`: Comprehensive regulatory audit export model enclosing all ledger entries, attempts, flags, verification reports, and offline verification instructions.
+     - `ReconciliationService.java`: Implemented `exportAuditPack(User user)` aggregating full system state for regulatory inspection.
+     - `AuditController.java`: Added `/reconcile` path alias and `@GetMapping("/export")` restricted to `ROLE_AUDITOR`.
+     - `AccountService.java` & `AccountController.java`: Added `@PatchMapping("/{id}/status")` to freeze/unfreeze accounts and `@PatchMapping("/{id}/overdraft-limit")` to tune overdraft limits in paise (both restricted to `ROLE_ADMIN`).
+     - Verified all 21 backend integration tests compile and pass cleanly (`mvn test`).
+  2. **Proof Panel Component (`ProofPanel.tsx`)**:
+     - Visual breakdown of the fundamental conservation invariant: $\sum \text{Customer Balances} + \text{External System Offset} = \sum \text{All Balances} \equiv 0$ paise.
+     - On-demand "Reconcile Balances" button querying `/api/audit/reconcile` and rendering discrepancy reports if detected.
+     - Cryptographic SHA-256 Hash Chain verification card with real-time traversal of all account entry chains from genesis to tip, stamping the result with green `[VERIFIED]` or red `[TAMPERED]`.
+  3. **Admin Management Console (`AdminPanel.tsx`)**:
+     - Account controls: Real-time table of all accounts with 1-click Freeze/Unfreeze toggle and overdraft limit adjustment modal.
+     - AML & Anomaly Flags: Queue displaying triggered heuristic flags (large transactions, velocity breaches, structuring, repeated refusals) with severity badges and an interactive review note modal (`POST /api/audit/flags/{id}/review`).
+     - Reversal Console: Form allowing bank administrators to issue equal-and-opposite corrective journals (`POST /api/reversals/{journalId}`) with strict two-phase locking.
+  4. **Auditor Inspection Mode & One-Click Export**:
+     - Watermarked amber banner indicating read-only enforcement (write paths return HTTP 403).
+     - One-click "Download Complete Audit Pack (.json)" button generating a verifiable JSON bundle of the entire ledger history.
+  5. **Adversarial Attack Lab (`AttackLab.tsx`)**:
+     - Real-time interactive simulation panel executing three core attack vectors:
+       1. *Concurrency Race Attack*: Fires 20 concurrent threads attempting ₹60 withdrawals against an account with limited funds. Proves `SELECT ... FOR UPDATE` serializes requests so exactly 1 succeeds and 19 are refused without illegal deficit.
+       2. *Idempotency Replay Attack*: Fires 10 concurrent requests sharing an identical `Idempotency-Key`. Proves atomic locking and cached replay without duplicate debit/credit.
+       3. *Overdraft Breach Exploit*: Attempts a ₹1,000,000 withdrawal against a ₹0 overdraft limit. Proves immediate refusal and audit attempt logging.
+     - Live execution log terminal and rubber stamp outcome visualizers (`POSTED`, `REFUSED`, `REPLAYED`).
+  6. **Zero-Error Frontend Build**:
+     - Verified with `npm --prefix frontend run build` generating production bundle in 8.38s with 0 TypeScript errors.
+
+### [INTEGRITY] Self-Review & Flaws Caught in Output
+1. **[INTEGRITY] JSX Curly Braces in Mathematical Formula**:
+   - *Risk/Flaw*: In `ProofPanel.tsx`, typing `($\Sigma \text{credits} = \Sigma \text{debits}$)` in JSX was parsed as JavaScript variable expressions `{credits}` and `{debits}`, resulting in TypeScript build errors TS2304 ("Cannot find name 'credits'").
+   - *Correction*: Replaced with HTML entities `(&Sigma; credits = &Sigma; debits)`, preserving strict typographical fidelity and resolving the build error.
+2. **[INTEGRITY] Auditor Role Enforcement & Verifiable Export**:
+   - *Risk/Flaw*: Regulatory audit exports must be strictly accessible to authorized oversight personnel (`ROLE_AUDITOR`) without exposing write or administrative capabilities.
+   - *Correction*: Secured `/api/audit/export` with `@PreAuthorize("hasRole('AUDITOR')")` and surfaced the export action prominently in Auditor Mode while keeping all write actions locked with HTTP 403.
+3. **[INTEGRITY] Safe Decimal to Paise Conversion in Overdraft Controls**:
+   - *Risk/Flaw*: When administrators enter Rupee limits (e.g. ₹5,000.00), floating-point imprecision could send fractional paise to the backend.
+   - *Correction*: Enforced client-side integer conversion using `Math.round(rupees * 100)` and verified the backend stores strictly integer paise (`BIGINT`).
+- **Commit Hash**: `5a76c35` (`feat(ui): statement, proof, admin, attack lab`)

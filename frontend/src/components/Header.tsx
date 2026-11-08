@@ -1,15 +1,25 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, LogOut } from 'lucide-react';
+import { Lock, LogOut, Download } from 'lucide-react';
+
+export type NavTab = 'dashboard' | 'proof' | 'admin' | 'attack';
 
 interface HeaderProps {
   onOpenLogin: () => void;
   systemConservationStatus?: 'BALANCED' | 'DISCREPANCY';
+  currentTab: NavTab;
+  onSelectTab: (tab: NavTab) => void;
+  onExportAuditPack?: () => void;
+  isExportingAuditPack?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenLogin,
   systemConservationStatus = 'BALANCED',
+  currentTab,
+  onSelectTab,
+  onExportAuditPack,
+  isExportingAuditPack = false,
 }) => {
   const { user, switchRole, logout, isLoading } = useAuth();
 
@@ -224,6 +234,31 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* User Identity / Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {user?.role === 'AUDITOR' && onExportAuditPack && (
+            <button
+              onClick={onExportAuditPack}
+              disabled={isExportingAuditPack}
+              title="Download cryptographic audit pack containing all ledgers, attempts, flags and instructions"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.35rem 0.75rem',
+                backgroundColor: 'var(--color-stamp-saffron, #9A5B13)',
+                color: '#FFF8EE',
+                border: 'none',
+                borderRadius: '4px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: isExportingAuditPack ? 'wait' : 'pointer',
+              }}
+            >
+              <Download size={14} />
+              {isExportingAuditPack ? 'Exporting...' : 'Export Audit Pack'}
+            </button>
+          )}
+
           {user ? (
             <>
               <div style={{ textAlign: 'right', lineHeight: 1.2 }}>
@@ -286,6 +321,88 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
         </div>
+      </div>
+
+      {/* Editorial Navigation Tabs Strip */}
+      <div
+        style={{
+          maxWidth: '1200px',
+          margin: '0.5rem auto 0 auto',
+          display: 'flex',
+          gap: '0.5rem',
+          borderTop: '1px solid rgba(0,0,0,0.06)',
+          paddingTop: '0.5rem',
+        }}
+      >
+        <button
+          onClick={() => onSelectTab('dashboard')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: currentTab === 'dashboard' ? '2px solid var(--color-rule-green, #1E4E38)' : '2px solid transparent',
+            padding: '0.35rem 0.85rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.8rem',
+            fontWeight: currentTab === 'dashboard' ? 700 : 500,
+            color: currentTab === 'dashboard' ? 'var(--color-rule-green, #1E4E38)' : 'var(--color-ink-muted, #8C7E6A)',
+            cursor: 'pointer',
+          }}
+        >
+          Overview & Accounts
+        </button>
+
+        <button
+          onClick={() => onSelectTab('proof')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: currentTab === 'proof' ? '2px solid var(--color-rule-green, #1E4E38)' : '2px solid transparent',
+            padding: '0.35rem 0.85rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.8rem',
+            fontWeight: currentTab === 'proof' ? 700 : 500,
+            color: currentTab === 'proof' ? 'var(--color-rule-green, #1E4E38)' : 'var(--color-ink-muted, #8C7E6A)',
+            cursor: 'pointer',
+          }}
+        >
+          Proof & Invariants
+        </button>
+
+        {user?.role === 'ADMIN' && (
+          <button
+            onClick={() => onSelectTab('admin')}
+            style={{
+              background: 'none',
+              border: 'none',
+              borderBottom: currentTab === 'admin' ? '2px solid var(--color-stamp-vermilion, #B33927)' : '2px solid transparent',
+              padding: '0.35rem 0.85rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              fontWeight: currentTab === 'admin' ? 700 : 500,
+              color: currentTab === 'admin' ? 'var(--color-stamp-vermilion, #B33927)' : 'var(--color-ink-muted, #8C7E6A)',
+              cursor: 'pointer',
+            }}
+          >
+            Admin & Compliance
+          </button>
+        )}
+
+        <button
+          onClick={() => onSelectTab('attack')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: currentTab === 'attack' ? '2px solid var(--color-stamp-vermilion, #B33927)' : '2px solid transparent',
+            padding: '0.35rem 0.85rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.8rem',
+            fontWeight: currentTab === 'attack' ? 700 : 500,
+            color: currentTab === 'attack' ? 'var(--color-stamp-vermilion, #B33927)' : 'var(--color-ink-muted, #8C7E6A)',
+            cursor: 'pointer',
+          }}
+        >
+          ⚡ Attack Lab
+        </button>
       </div>
     </header>
   );
