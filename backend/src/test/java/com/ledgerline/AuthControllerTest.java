@@ -127,5 +127,38 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("Register Customer (HOLDER): Returns 201 with JWT and creates account")
+    void registerHolderSuccess() throws Exception {
+        com.ledgerline.dto.RegisterRequest request = com.ledgerline.dto.RegisterRequest.builder()
+                .email("newcustomer" + System.currentTimeMillis() + "@ledgerline.internal")
+                .password("Password123!")
+                .role(com.ledgerline.domain.Role.HOLDER)
+                .build();
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.token", notNullValue()))
+                .andExpect(jsonPath("$.role", is("HOLDER")));
+    }
+
+    @Test
+    @DisplayName("Register Admin Forbidden: ADMIN role signup returns 400 Bad Request")
+    void registerAdminForbidden() throws Exception {
+        com.ledgerline.dto.RegisterRequest request = com.ledgerline.dto.RegisterRequest.builder()
+                .email("fakeadmin" + System.currentTimeMillis() + "@ledgerline.internal")
+                .password("Password123!")
+                .role(com.ledgerline.domain.Role.ADMIN)
+                .build();
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail", is("Registration for the ADMIN role is strictly prohibited. The system administrator account is pre-provisioned.")));
+    }
 }
 

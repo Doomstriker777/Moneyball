@@ -63,6 +63,15 @@ public class AuditController {
         return ResponseEntity.ok(report);
     }
 
+    @GetMapping("/transactions")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get all system-wide transaction logs",
+               description = "Returns complete chronological list of all ledger entries across all accounts. Admin only.")
+    public ResponseEntity<List<com.ledgerline.dto.TransactionLogResponse>> getAllTransactions() {
+        List<com.ledgerline.dto.TransactionLogResponse> transactions = reconciliationService.getAllTransactions();
+        return ResponseEntity.ok(transactions);
+    }
+
     @GetMapping("/flags")
     @PreAuthorize("hasAnyRole('ADMIN', 'AUDITOR')")
     @Operation(summary = "List compliance & anomaly flags",

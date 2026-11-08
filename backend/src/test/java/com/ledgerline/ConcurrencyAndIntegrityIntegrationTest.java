@@ -92,6 +92,18 @@ class ConcurrencyAndIntegrityIntegrationTest {
         return objectMapper.readTree(res.getResponse().getContentAsString()).get("token").asText();
     }
 
+    private void ensureAccountFunded(Long accountId, long minPaise) {
+        long current = accountRepository.findById(accountId).orElseThrow().getBalance();
+        if (current < minPaise) {
+            User adminUser = userRepository.findByEmail("admin@ledgerline.internal").orElseThrow();
+            postingService.deposit(
+                    DepositRequest.builder().accountId(accountId).amount(minPaise - current + 100000L).reason("Test prefund").build(),
+                    adminUser,
+                    "prefund-" + accountId + "-" + System.currentTimeMillis()
+            );
+        }
+    }
+
     @Test
     @DisplayName("Race Test 1: No Overdraw — 20 concurrent withdrawals of 60 on balance 100 => exactly 1 succeeds, 19 refused")
     void noOverdrawConcurrentRace() throws Exception {
@@ -278,6 +290,7 @@ class ConcurrencyAndIntegrityIntegrationTest {
     @Test
     @DisplayName("Race Test 3: Idempotent Replay — 10 concurrent requests with identical key produce exactly 1 journal")
     void idempotentReplayConcurrentRace() throws Exception {
+        ensureAccountFunded(2L, 50000L);
         String sharedKey = "idemp-race-" + UUID.randomUUID();
         TransferRequest req = TransferRequest.builder()
                 .sourceAccountId(2L)
@@ -377,6 +390,7 @@ class ConcurrencyAndIntegrityIntegrationTest {
     @Test
     @DisplayName("Integrity Test 5: Reversals — Admin posts equal-and-opposite reversal, UNIQUE(reversal_of) blocks duplicate reversal")
     void adminReversalInvertsJournalAndPreventsDuplicate() throws Exception {
+        ensureAccountFunded(2L, 50000L);
         // 1. Post a transfer from Holder 1 to Holder 2
         TransferRequest transferReq = TransferRequest.builder()
                 .sourceAccountId(2L)

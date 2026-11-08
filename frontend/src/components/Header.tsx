@@ -5,7 +5,7 @@ import { Lock, LogOut, Download } from 'lucide-react';
 export type NavTab = 'dashboard' | 'proof' | 'admin' | 'attack';
 
 interface HeaderProps {
-  onOpenLogin: () => void;
+  onOpenLogin: (initialTab?: 'login' | 'register') => void;
   systemConservationStatus?: 'BALANCED' | 'DISCREPANCY';
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportAuditPack,
   isExportingAuditPack = false,
 }) => {
-  const { user, switchRole, logout, isLoading } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <header
@@ -74,165 +74,38 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.2rem 0.6rem',
-              borderRadius: '999px',
-              backgroundColor:
-                systemConservationStatus === 'BALANCED'
-                  ? 'var(--color-rule-green-light)'
-                  : 'var(--color-stamp-vermilion-light)',
-              color:
-                systemConservationStatus === 'BALANCED'
-                  ? 'var(--color-rule-green)'
-                  : 'var(--color-stamp-vermilion)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              fontFamily: 'var(--font-mono)',
-              border: `1px solid ${
-                systemConservationStatus === 'BALANCED'
-                  ? 'rgba(30, 78, 56, 0.3)'
-                  : 'rgba(179, 57, 39, 0.3)'
-              }`,
-            }}
-          >
-            ● Σ ALL BALANCES = 0
-          </span>
+          {user?.role === 'ADMIN' && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '999px',
+                backgroundColor:
+                  systemConservationStatus === 'BALANCED'
+                    ? 'var(--color-rule-green-light)'
+                    : 'var(--color-stamp-vermilion-light)',
+                color:
+                  systemConservationStatus === 'BALANCED'
+                    ? 'var(--color-rule-green)'
+                    : 'var(--color-stamp-vermilion)',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                border: `1px solid ${
+                  systemConservationStatus === 'BALANCED'
+                    ? 'rgba(30, 78, 56, 0.3)'
+                    : 'rgba(179, 57, 39, 0.3)'
+                }`,
+              }}
+            >
+              ● Σ ALL BALANCES = 0
+            </span>
+          )}
         </div>
 
-        {/* Demo 1-Click Role Switcher */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            backgroundColor: 'var(--color-paper-dark)',
-            padding: '0.25rem 0.4rem',
-            borderRadius: '6px',
-            border: '1px solid rgba(0,0,0,0.06)',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.7rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              fontWeight: 700,
-              color: 'var(--color-ink-muted)',
-              padding: '0 0.4rem',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            Demo Switcher:
-          </span>
-
-          <button
-            onClick={() => switchRole('ADMIN')}
-            disabled={isLoading}
-            style={{
-              padding: '0.25rem 0.65rem',
-              fontSize: '0.75rem',
-              fontFamily: 'var(--font-mono)',
-              fontWeight: user?.role === 'ADMIN' ? 700 : 500,
-              backgroundColor:
-                user?.role === 'ADMIN'
-                  ? 'var(--color-rule-green)'
-                  : 'var(--color-paper-light)',
-              color:
-                user?.role === 'ADMIN'
-                  ? 'var(--color-paper-light)'
-                  : 'var(--color-ink)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            ADMIN
-          </button>
-
-          <button
-            onClick={() => switchRole('HOLDER1')}
-            disabled={isLoading}
-            style={{
-              padding: '0.25rem 0.65rem',
-              fontSize: '0.75rem',
-              fontFamily: 'var(--font-mono)',
-              fontWeight:
-                user?.email === 'holder1@ledgerline.internal' ? 700 : 500,
-              backgroundColor:
-                user?.email === 'holder1@ledgerline.internal'
-                  ? 'var(--color-rule-green)'
-                  : 'var(--color-paper-light)',
-              color:
-                user?.email === 'holder1@ledgerline.internal'
-                  ? 'var(--color-paper-light)'
-                  : 'var(--color-ink)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            HOLDER 1
-          </button>
-
-          <button
-            onClick={() => switchRole('HOLDER2')}
-            disabled={isLoading}
-            style={{
-              padding: '0.25rem 0.65rem',
-              fontSize: '0.75rem',
-              fontFamily: 'var(--font-mono)',
-              fontWeight:
-                user?.email === 'holder2@ledgerline.internal' ? 700 : 500,
-              backgroundColor:
-                user?.email === 'holder2@ledgerline.internal'
-                  ? 'var(--color-rule-green)'
-                  : 'var(--color-paper-light)',
-              color:
-                user?.email === 'holder2@ledgerline.internal'
-                  ? 'var(--color-paper-light)'
-                  : 'var(--color-ink)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            HOLDER 2
-          </button>
-
-          <button
-            onClick={() => switchRole('AUDITOR')}
-            disabled={isLoading}
-            style={{
-              padding: '0.25rem 0.65rem',
-              fontSize: '0.75rem',
-              fontFamily: 'var(--font-mono)',
-              fontWeight: user?.role === 'AUDITOR' ? 700 : 500,
-              backgroundColor:
-                user?.role === 'AUDITOR'
-                  ? 'var(--color-rule-green)'
-                  : 'var(--color-paper-light)',
-              color:
-                user?.role === 'AUDITOR'
-                  ? 'var(--color-paper-light)'
-                  : 'var(--color-ink)',
-              border: '1px solid rgba(0,0,0,0.1)',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            AUDITOR
-          </button>
-        </div>
-
-        {/* User Identity / Actions */}
+        {/* User Identity / Authentication Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {user?.role === 'AUDITOR' && onExportAuditPack && (
             <button
@@ -282,6 +155,27 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               </div>
               <button
+                onClick={() => onOpenLogin('login')}
+                title="Sign in with different credentials"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.35rem 0.65rem',
+                  backgroundColor: 'var(--color-paper-light)',
+                  color: 'var(--color-ink)',
+                  border: '1px solid rgba(0,0,0,0.18)',
+                  borderRadius: '4px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Lock size={13} />
+                Switch User
+              </button>
+              <button
                 onClick={logout}
                 title="Sign Out"
                 style={{
@@ -299,26 +193,48 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </>
           ) : (
-            <button
-              onClick={onOpenLogin}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.4rem 0.85rem',
-                backgroundColor: 'var(--color-rule-green)',
-                color: 'var(--color-paper-light)',
-                border: 'none',
-                borderRadius: '4px',
-                fontFamily: 'var(--font-serif)',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-                cursor: 'pointer',
-              }}
-            >
-              <Lock size={14} />
-              Sign In
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <button
+                onClick={() => onOpenLogin('login')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.4rem 0.85rem',
+                  backgroundColor: '#FAF8F4',
+                  color: '#1A1815',
+                  border: '1px solid #D6CEBE',
+                  borderRadius: '4px',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <Lock size={13} />
+                Sign In
+              </button>
+              <button
+                onClick={() => onOpenLogin('register')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 1rem',
+                  backgroundColor: 'var(--color-rule-green, #1E4E38)',
+                  color: '#FFF8EE',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(30, 78, 56, 0.25)',
+                }}
+              >
+                + Open Account
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -351,22 +267,24 @@ export const Header: React.FC<HeaderProps> = ({
           Overview & Accounts
         </button>
 
-        <button
-          onClick={() => onSelectTab('proof')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: currentTab === 'proof' ? '2px solid var(--color-rule-green, #1E4E38)' : '2px solid transparent',
-            padding: '0.35rem 0.85rem',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.8rem',
-            fontWeight: currentTab === 'proof' ? 700 : 500,
-            color: currentTab === 'proof' ? 'var(--color-rule-green, #1E4E38)' : 'var(--color-ink-muted, #8C7E6A)',
-            cursor: 'pointer',
-          }}
-        >
-          Proof & Invariants
-        </button>
+        {user?.role === 'ADMIN' && (
+          <button
+            onClick={() => onSelectTab('proof')}
+            style={{
+              background: 'none',
+              border: 'none',
+              borderBottom: currentTab === 'proof' ? '2px solid var(--color-rule-green, #1E4E38)' : '2px solid transparent',
+              padding: '0.35rem 0.85rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              fontWeight: currentTab === 'proof' ? 700 : 500,
+              color: currentTab === 'proof' ? 'var(--color-rule-green, #1E4E38)' : 'var(--color-ink-muted, #8C7E6A)',
+              cursor: 'pointer',
+            }}
+          >
+            Proof & Invariants
+          </button>
+        )}
 
         {user?.role === 'ADMIN' && (
           <button
@@ -387,22 +305,24 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        <button
-          onClick={() => onSelectTab('attack')}
-          style={{
-            background: 'none',
-            border: 'none',
-            borderBottom: currentTab === 'attack' ? '2px solid var(--color-stamp-vermilion, #B33927)' : '2px solid transparent',
-            padding: '0.35rem 0.85rem',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.8rem',
-            fontWeight: currentTab === 'attack' ? 700 : 500,
-            color: currentTab === 'attack' ? 'var(--color-stamp-vermilion, #B33927)' : 'var(--color-ink-muted, #8C7E6A)',
-            cursor: 'pointer',
-          }}
-        >
-          ⚡ Attack Lab
-        </button>
+        {user?.role === 'ADMIN' && (
+          <button
+            onClick={() => onSelectTab('attack')}
+            style={{
+              background: 'none',
+              border: 'none',
+              borderBottom: currentTab === 'attack' ? '2px solid var(--color-stamp-vermilion, #B33927)' : '2px solid transparent',
+              padding: '0.35rem 0.85rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.8rem',
+              fontWeight: currentTab === 'attack' ? 700 : 500,
+              color: currentTab === 'attack' ? 'var(--color-stamp-vermilion, #B33927)' : 'var(--color-ink-muted, #8C7E6A)',
+              cursor: 'pointer',
+            }}
+          >
+            Security Stress Lab
+          </button>
+        )}
       </div>
     </header>
   );

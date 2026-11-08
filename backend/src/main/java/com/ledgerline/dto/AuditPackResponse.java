@@ -28,3 +28,4 @@ public class AuditPackResponse {
     private List<Flag> complianceFlags;
     private String offlineVerificationInstructions;
 }
+

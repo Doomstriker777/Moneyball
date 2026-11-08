@@ -2,11 +2,13 @@ package com.ledgerline.controller;
 
 import com.ledgerline.dto.AuthResponse;
 import com.ledgerline.dto.LoginRequest;
+import com.ledgerline.dto.RegisterRequest;
 import com.ledgerline.dto.UserSummaryResponse;
 import com.ledgerline.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,13 +16,20 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@Tag(name = "Authentication", description = "Endpoints for user authentication and session context")
+@Tag(name = "Authentication", description = "Endpoints for user authentication, registration and session context")
 public class AuthController {
 
     private final AuthService authService;
 
     public AuthController(AuthService authService) {
         this.authService = authService;
+    }
+
+    @PostMapping({"/register", "/signup"})
+    @Operation(summary = "Register a new user account", description = "Registers a new user with HOLDER (Customer) or AUDITOR role. ADMIN role registration is strictly prohibited.")
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        AuthResponse response = authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")

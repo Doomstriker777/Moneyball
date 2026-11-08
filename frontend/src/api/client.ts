@@ -11,7 +11,8 @@ import {
   Flag,
   FlagReviewRequest,
   ReversalRequest,
-  AuditPackResponse
+  AuditPackResponse,
+  TransactionLogItem
 } from '../types';
 
 class ApiError extends Error {
@@ -87,6 +88,13 @@ class ApiClient {
     });
   }
 
+  async register(email: string, password: string, role: 'HOLDER' | 'AUDITOR'): Promise<AuthResponse> {
+    return this.request<AuthResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, role })
+    });
+  }
+
   // --- Accounts API ---
   async getAccounts(): Promise<Account[]> {
     return this.request<Account[]>('/api/accounts');
@@ -133,6 +141,10 @@ class ApiClient {
 
   async exportAuditPack(): Promise<AuditPackResponse> {
     return this.request<AuditPackResponse>('/api/audit/export');
+  }
+
+  async getAllTransactions(): Promise<TransactionLogItem[]> {
+    return this.request<TransactionLogItem[]>('/api/audit/transactions');
   }
 
   async getFlags(status?: string): Promise<Flag[]> {

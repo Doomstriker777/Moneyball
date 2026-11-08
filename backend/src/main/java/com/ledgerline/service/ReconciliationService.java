@@ -5,13 +5,17 @@ import com.ledgerline.dto.AccountResponse;
 import com.ledgerline.dto.AuditPackResponse;
 import com.ledgerline.dto.HashChainVerificationReport;
 import com.ledgerline.dto.ReconciliationReport;
+import com.ledgerline.dto.TransactionLogResponse;
 import com.ledgerline.repository.*;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ReconciliationService {
@@ -197,5 +201,44 @@ public class ReconciliationService {
                 .complianceFlags(flags)
                 .offlineVerificationInstructions(instructions)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransactionLogResponse> getAllTransactions() {
+        List<LedgerEntry> entries = ledgerEntryRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
+        Map<Long, Journal> journalMap = journalRepository.findAll().stream()
+                .collect(Collectors.toMap(Journal::getId, j -> j, (a, b) -> a));
+        Map<Long, Account> accountMap = accountRepository.findAll().stream()
+                .collect(Collectors.toMap(Account::getId, a -> a, (a, b) -> a));
+
+        List<TransactionLogResponse> list = new ArrayList<>();
+        for (LedgerEntry e : entries) {
+            Journal j = journalMap.get(e.getJournalId());
+            Account acc = accountMap.get(e.getAccountId());
+
+            List<LedgerEntry> siblings = ledgerEntryRepository.findByJournalId(e.getJournalId());
+            Account counterparty = siblings.stream()
+                    .filter(s -> !s.getId().equals(e.getId()))
+                    .findFirst()
+                    .map(s -> accountMap.get(s.getAccountId()))
+                    .orElse(null);
+
+            list.add(TransactionLogResponse.builder()
+                    .journalId(e.getJournalId())
+                    .entryId(e.getId())
+                    .accountId(e.getAccountId())
+                    .accountNumber(acc != null ? acc.getNumber() : "ACC-" + e.getAccountId())
+                    .kind(j != null ? j.getKind() : null)
+                    .direction(e.getDirection().name())
+                    .amount(e.getAmount())
+                    .balanceAfter(e.getBalanceAfter())
+                    .reason(j != null ? j.getReason() : "")
+                    .counterpartyAccountId(counterparty != null ? counterparty.getId() : null)
+                    .counterpartyAccountNumber(counterparty != null ? counterparty.getNumber() : null)
+                    .hash(e.getHash())
+                    .createdAt(e.getCreatedAt())
+                    .build());
+        }
+        return list;
     }
 }

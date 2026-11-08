@@ -80,6 +80,22 @@ class PostingIntegrationTest {
         return objectMapper.readTree(res.getResponse().getContentAsString()).get("token").asText();
     }
 
+    private void fundAccountIfNecessary(Long accountId, long minPaise) throws Exception {
+        long current = accountRepository.findById(accountId).orElseThrow().getBalance();
+        if (current < minPaise) {
+            DepositRequest dep = DepositRequest.builder()
+                    .accountId(accountId)
+                    .amount(minPaise - current + 50000L)
+                    .reason("Test setup funding")
+                    .build();
+            mockMvc.perform(post("/api/deposits")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dep)))
+                    .andExpect(status().isOk());
+        }
+    }
+
     @Test
     @DisplayName("Deposit: Debits EXTERNAL, credits customer, global conservation sum remains 0")
     void depositSuccessMaintainsConservation() throws Exception {
@@ -107,6 +123,7 @@ class PostingIntegrationTest {
     @Test
     @DisplayName("Withdrawal: Debits customer, credits EXTERNAL, global conservation sum remains 0")
     void withdrawalSuccessMaintainsConservation() throws Exception {
+        fundAccountIfNecessary(2L, 50000L);
         WithdrawalRequest req = WithdrawalRequest.builder()
                 .accountId(2L) // ACC-100001 (Holder 1)
                 .amount(10000L) // ₹100.00
@@ -130,6 +147,7 @@ class PostingIntegrationTest {
     @Test
     @DisplayName("Transfer: Moves paise between accounts, ordered locking prevents deadlocks, sum remains 0")
     void transferBetweenHoldersSuccess() throws Exception {
+        fundAccountIfNecessary(2L, 50000L);
         TransferRequest req = TransferRequest.builder()
                 .sourceAccountId(2L) // ACC-100001
                 .destinationAccountId(3L) // ACC-100002

@@ -1,9 +1,12 @@
 package com.ledgerline.service;
 
-import com.ledgerline.domain.User;
+import com.ledgerline.domain.*;
 import com.ledgerline.dto.AuthResponse;
 import com.ledgerline.dto.LoginRequest;
+import com.ledgerline.dto.RegisterRequest;
 import com.ledgerline.dto.UserSummaryResponse;
+import com.ledgerline.repository.AccountMemberRepository;
+import com.ledgerline.repository.AccountRepository;
 import com.ledgerline.repository.UserRepository;
 import com.ledgerline.security.JwtService;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +23,8 @@ import java.time.Instant;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
+    private final AccountMemberRepository accountMemberRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final int maxFailedAttempts;
@@ -27,15 +32,77 @@ public class AuthService {
 
     public AuthService(
             UserRepository userRepository,
+            AccountRepository accountRepository,
+            AccountMemberRepository accountMemberRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             @Value("${ledgerline.auth.max-failed-attempts:5}") int maxFailedAttempts,
             @Value("${ledgerline.auth.lockout-duration-minutes:15}") int lockoutDurationMinutes) {
         this.userRepository = userRepository;
+        this.accountRepository = accountRepository;
+        this.accountMemberRepository = accountMemberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.maxFailedAttempts = maxFailedAttempts;
         this.lockoutDurationMinutes = lockoutDurationMinutes;
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        String cleanEmail = request.getEmail().trim().toLowerCase();
+
+        // 1. Enforce admin signup restriction: Admin accounts CANNOT be registered
+        if (request.getRole() == Role.ADMIN) {
+            throw new IllegalArgumentException("Registration for the ADMIN role is strictly prohibited. The system administrator account is pre-provisioned.");
+        }
+
+        // 2. Check if user already exists
+        if (userRepository.findByEmail(cleanEmail).isPresent()) {
+            throw new IllegalArgumentException("An account with email '" + cleanEmail + "' is already registered.");
+        }
+
+        // 3. Create user
+        User user = User.builder()
+                .email(cleanEmail)
+                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                .role(request.getRole())
+                .failedAttempts(0)
+                .build();
+        user = userRepository.save(user);
+
+        // 4. If HOLDER, automatically provision a customer checking account
+        if (user.getRole() == Role.HOLDER) {
+            String accountNumber = String.format("ACC-%06d", 100000 + user.getId());
+            while (accountRepository.findByNumber(accountNumber).isPresent()) {
+                accountNumber = "ACC-" + (int)(100000 + Math.random() * 900000);
+            }
+
+            Account account = Account.builder()
+                    .number(accountNumber)
+                    .ownerId(user.getId())
+                    .type(AccountType.CUSTOMER)
+                    .balance(0L)
+                    .overdraftLimit(0L)
+                    .status(AccountStatus.ACTIVE)
+                    .build();
+            account = accountRepository.save(account);
+
+            AccountMember member = AccountMember.builder()
+                    .userId(user.getId())
+                    .accountId(account.getId())
+                    .build();
+            accountMemberRepository.save(member);
+        }
+
+        // 5. Issue JWT and return AuthResponse
+        String token = jwtService.generateToken(user);
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .userId(user.getId())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .build();
     }
 
     @Transactional

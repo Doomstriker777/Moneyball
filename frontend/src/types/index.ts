@@ -154,4 +154,21 @@ export interface AuditPackResponse {
   offlineVerificationInstructions: string;
 }
 
+export interface TransactionLogItem {
+  journalId: number;
+  entryId: number;
+  accountId: number;
+  accountNumber: string;
+  kind: 'DEPOSIT' | 'WITHDRAWAL' | 'TRANSFER' | 'REVERSAL';
+  direction: 'CREDIT' | 'DEBIT';
+  amount: number; // in paise
+  balanceAfter: number; // in paise
+  reason: string;
+  counterpartyAccountId?: number;
+  counterpartyAccountNumber?: string;
+  hash: string;
+  createdAt: string;
+}
+
+
 

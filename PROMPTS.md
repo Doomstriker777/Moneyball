@@ -324,3 +324,42 @@
    - *Risk/Flaw*: When administrators enter Rupee limits (e.g. ₹5,000.00), floating-point imprecision could send fractional paise to the backend.
    - *Correction*: Enforced client-side integer conversion using `Math.round(rupees * 100)` and verified the backend stores strictly integer paise (`BIGINT`).
 - **Commit Hash**: `5a76c35` (`feat(ui): statement, proof, admin, attack lab`)
+
+
+---
+
+## Prompt 11: Milestone 6 — Production Hardening, Container Deployment & Final Audit (Day 3 PM)
+- **Timestamp**: `2026-11-08 20:54:08 IST`
+- **User Prompt**:
+  > "lets finish it"
+- **Context for a Stranger**:
+  The user authorized the completion of the final milestone: Milestone 6 (Day 3 PM: `chore: deploy, docs, hardening`). This turn finalized the containerization, cloud deployment configurations, production security hardening, demonstration walkthrough scripts, and full documentation across the Moneyball repository.
+- **What Was Produced**:
+  1. **Multi-Stage Containerization**:
+     - `backend/Dockerfile`: Multi-stage container build utilizing `maven:3.9-eclipse-temurin-21-alpine` for offline dependency caching and compilation, and `eclipse-temurin:21-jre-alpine` for the minimal production runtime. Runs as dedicated non-root user `appuser:appgroup`, incorporates container-aware JVM flags (`-XX:+UseG1GC`, `-XX:MaxRAMPercentage=75.0`), and configures automated Spring Actuator healthcheck.
+     - `frontend/Dockerfile`: Multi-stage container build utilizing `node:20-alpine` for building static assets and `nginx:alpine` for high-performance static delivery.
+     - `frontend/nginx.conf`: Production Nginx server configuration with Gzip compression, SPA client routing fallback (`try_files $uri $uri/ /index.html;`), reverse proxying for `/api/` to backend, and security headers (`X-Frame-Options DENY`, `X-Content-Type-Options nosniff`, CSP).
+     - `docker-compose.yml`: Multi-service orchestration configuring `postgres` (with `pg_isready` healthcheck), `backend` (depends on healthy database), and `frontend` (depends on healthy backend) on an isolated bridge network.
+  2. **Cloud Deployment Blueprints**:
+     - `render.yaml`: Infrastructure-as-code specification for Render cloud hosting, provisioning a PostgreSQL database, Spring Boot Docker Web Service, and Living Ledger static frontend.
+     - `frontend/netlify.toml`: Netlify deployment configuration specifying build commands, SPA routing rules, API proxy rewrites, and strict security headers.
+  3. **Demonstration & Verification Script**:
+     - `DEMO.md`: A detailed 7-act, 5-minute video demonstration script walking through the core banking problem, 1-click role switcher, double-entry movements, Attack Lab simulations, cryptographic SHA-256 seal verification, and Auditor JSON export.
+  4. **Documentation & Spec Finalization**:
+     - `API.md`: Comprehensive REST API specification with payload schemas, error status codes, and double-entry money impact notes for all endpoints.
+     - `README.md`: Checked off all 6 milestones in the implementation checklist and added Docker Compose execution and cloud deployment instructions.
+  5. **Verification**:
+     - All 21 integration tests pass cleanly (`mvn test`).
+     - Frontend builds with zero TypeScript errors in 5.53s (`npm run build`).
+
+### [INTEGRITY] Self-Review & Flaws Caught in Output
+1. **[INTEGRITY] Container Privilege Minimization**:
+   - *Risk/Flaw*: Standard Java container images default to running as root (UID 0), creating severe container breakout and privilege escalation risks in multi-tenant cloud environments.
+   - *Correction*: In `backend/Dockerfile`, created a dedicated unprivileged user and group (`RUN addgroup -S appgroup && adduser -S appuser -G appgroup`) and enforced `USER appuser` prior to entrypoint execution.
+2. **[INTEGRITY] Startup Race Condition in Docker Compose**:
+   - *Risk/Flaw*: When starting a fresh multi-container stack, Spring Boot boots faster than PostgreSQL finishes initializing its cluster and running `V1__init_schema.sql`, causing Flyway connection crashes.
+   - *Correction*: Configured healthcheck conditions in `docker-compose.yml` (`condition: service_healthy` using `pg_isready` for Postgres and `/actuator/health` for Spring Boot), ensuring deterministic startup sequencing.
+3. **[INTEGRITY] Reverse Proxy Routing & Single-Page Fallbacks**:
+   - *Risk/Flaw*: Direct browser reloads on deep frontend routes in production environments produce HTTP 404 errors if the web server lacks SPA fallbacks.
+   - *Correction*: Configured `try_files $uri $uri/ /index.html;` in `frontend/nginx.conf` and `/* /index.html 200` in `frontend/netlify.toml`, accompanied by reverse proxy rules routing `/api/*` directly to the backend.
+- **Commit Hash**: `4c3b236` (`chore: deploy, docs, hardening`)

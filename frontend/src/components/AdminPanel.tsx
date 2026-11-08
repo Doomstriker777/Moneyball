@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/client';
-import { Account, Flag, PostingResponse } from '../types';
+import { Account, Flag, PostingResponse, TransactionLogItem } from '../types';
 import { RubberStamp } from './RubberStamp';
 
 export const AdminPanel: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [flags, setFlags] = useState<Flag[]>([]);
+  const [transactions, setTransactions] = useState<TransactionLogItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -37,12 +38,14 @@ export const AdminPanel: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [accs, flgs] = await Promise.all([
+      const [accs, flgs, txs] = await Promise.all([
         api.getAccounts(),
-        api.getFlags()
+        api.getFlags(),
+        api.getAllTransactions()
       ]);
       setAccounts(accs);
       setFlags(flgs);
+      setTransactions(txs);
     } catch (err: any) {
       setError(err.message || 'Failed to load admin data');
     } finally {
@@ -519,6 +522,99 @@ export const AdminPanel: React.FC = () => {
                           Review
                         </button>
                       )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* System-Wide Transaction Audit Log */}
+      <div style={{
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E2D9C8',
+        boxShadow: '0 4px 16px rgba(44, 40, 37, 0.05)',
+        borderRadius: '6px',
+        padding: '1.75rem',
+        marginTop: '2.5rem'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div>
+            <h2 style={{ fontFamily: "'Fraunces', serif", fontSize: '1.35rem', margin: 0, color: '#1A1815' }}>
+              System-Wide Transaction Audit Ledger ({transactions.length})
+            </h2>
+            <p style={{ fontFamily: "'Newsreader', serif", fontSize: '0.95rem', color: '#5A524A', margin: '0.25rem 0 0 0' }}>
+              Chronological immutable double-entry journal legs across all bank customer and system accounts.
+            </p>
+          </div>
+        </div>
+
+        {transactions.length === 0 ? (
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#8C7E6A', fontFamily: "'Newsreader', serif", fontStyle: 'italic' }}>
+            No transaction records found in ledger.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', maxHeight: '480px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.82rem' }}>
+              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#FAF8F4', zIndex: 1 }}>
+                <tr style={{ borderBottom: '2px solid #E2D9C8', textAlign: 'left', color: '#8C7E6A' }}>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Journal #</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Timestamp</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Account</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Type</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Direction</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Amount</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Balance After</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Counterparty</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>Reason</th>
+                  <th style={{ padding: '0.6rem 0.5rem' }}>SHA-256 Hash</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((tx) => (
+                  <tr key={tx.entryId} style={{ borderBottom: '1px solid #FAF0E4' }}>
+                    <td style={{ padding: '0.6rem 0.5rem', color: '#8C7E6A' }}>J#{tx.journalId}</td>
+                    <td style={{ padding: '0.6rem 0.5rem', whiteSpace: 'nowrap' }}>
+                      {new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', fontWeight: 600 }}>{tx.accountNumber}</td>
+                    <td style={{ padding: '0.6rem 0.5rem' }}>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: '3px',
+                        backgroundColor: '#2C2825',
+                        color: '#FFF8EE',
+                        fontWeight: 700
+                      }}>
+                        {tx.kind}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem' }}>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: tx.direction === 'CREDIT' ? '#1E4E38' : '#B33927'
+                      }}>
+                        {tx.direction}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', fontWeight: 700, color: tx.direction === 'CREDIT' ? '#1E4E38' : '#B33927' }}>
+                      {tx.direction === 'CREDIT' ? '+' : '-'}{formatPaise(tx.amount)}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', color: '#5A524A' }}>
+                      {formatPaise(tx.balanceAfter)}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', color: '#8C7E6A' }}>
+                      {tx.counterpartyAccountNumber || '---'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', color: '#5A524A', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {tx.reason}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.5rem', color: '#8C7E6A', fontSize: '0.7rem' }}>
+                      <code>{tx.hash ? tx.hash.substring(0, 10) + '...' : '---'}</code>
                     </td>
                   </tr>
                 ))}

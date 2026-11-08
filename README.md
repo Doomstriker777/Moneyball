@@ -87,11 +87,25 @@ npm run dev
 ```
 Open [`http://localhost:5173`](http://localhost:5173) in your browser to view **The Living Ledger**.
 
+### Step 4: Run Everything via Docker Compose (Multi-Container)
+To run the full stack (PostgreSQL, Spring Boot backend, and Nginx frontend) in isolated Docker containers:
+```bash
+docker compose up --build
+```
+- **Frontend**: [`http://localhost:3000`](http://localhost:3000)
+- **Backend API**: [`http://localhost:8080`](http://localhost:8080)
+- **PostgreSQL**: `localhost:5432`
+
+### Step 5: Cloud Deployment (Render & Netlify)
+- **Render**: Connect the repository to [Render](https://render.com) using the included [`render.yaml`](./render.yaml) Blueprint to provision the PostgreSQL managed database, the Spring Boot container, and static assets.
+- **Netlify**: Deploy the frontend via [Netlify](https://netlify.com) using [`frontend/netlify.toml`](./frontend/netlify.toml) for automatic single-page routing, security headers, and API proxying.
+
 ---
 
 ## 5. API Endpoints (Built So Far)
 
 ### Authentication
+- `POST /api/auth/register` — Register a new account (HOLDER or AUDITOR). Automatically provisions customer ledger account for HOLDER. ADMIN registration is disallowed.
 - `POST /api/auth/login` — Authenticate and receive JWT token.
 - `GET /api/auth/me` — Inspect current user context.
 
@@ -197,8 +211,10 @@ All passwords are encrypted with BCrypt (cost factor 10).
   - [x] Admin management panels (account freeze/unfreeze, overdraft limits, compliance flag review, journal reversals)
   - [x] Auditor read-only mode with watermark and one-click JSON audit pack export (`GET /api/audit/export`)
   - [x] Interactive Attack Lab (20-thread parallel withdrawal race, 10-thread idempotency replay, overdraft breach)
-- [ ] **Day 3 PM: `chore: deploy, docs, hardening`**
-  - [ ] Dockerfile and cloud deployment configuration (Render + Netlify)
-  - [ ] CORS allow-listing and environment configuration
-  - [ ] Final `API.md`, `THREATS.md`, and `PROMPTS.md`
-  - [ ] Demo video script and walkthrough
+- [x] **Day 3 PM: `chore: deploy, docs, hardening`**
+  - [x] Multi-stage Dockerfiles (`backend/Dockerfile`, `frontend/Dockerfile`) with non-root security & JRE tuning
+  - [x] Multi-container orchestration (`docker-compose.yml`) for PostgreSQL, Spring Boot backend, and Nginx frontend
+  - [x] Cloud deployment configuration for Render (`render.yaml`) and Netlify (`frontend/netlify.toml`)
+  - [x] Production security hardening (CORS allow-listing, CSP/HSTS/X-Frame-Options headers, Actuator healthcheck)
+  - [x] Final API specification (`API.md`), threat matrix (`THREATS.md`), and append-only audit trail (`PROMPTS.md`)
+  - [x] Comprehensive 5-minute video demonstration and walkthrough script (`DEMO.md`)
